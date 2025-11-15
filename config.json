@@ -1,6 +1,7 @@
 {
   "trading": {
     "symbol": "SOL/USDT",
+    "market": "SOLUSDT",
     "market_type": "future",
     "buy_level": 138.00,
     "sell_level": 143.00,

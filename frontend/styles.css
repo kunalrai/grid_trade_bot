@@ -1,0 +1,526 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+    color: #333;
+}
+
+.container {
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+/* Header */
+.header {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header-content h1 {
+    font-size: 28px;
+    color: #667eea;
+    margin-bottom: 4px;
+}
+
+.subtitle {
+    color: #666;
+    font-size: 14px;
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #666;
+}
+
+.connection-status .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #fbbf24;
+    animation: pulse 2s infinite;
+}
+
+.connection-status.connected .status-dot {
+    background: #10b981;
+}
+
+.connection-status.disconnected .status-dot {
+    background: #ef4444;
+    animation: none;
+}
+
+/* Main Content */
+.main-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+@media (max-width: 1200px) {
+    .main-content {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Card Styling */
+.card {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.card h2 {
+    font-size: 20px;
+    margin-bottom: 20px;
+    color: #333;
+    border-bottom: 2px solid #f3f4f6;
+    padding-bottom: 12px;
+}
+
+/* Control Panel */
+.bot-status {
+    margin-bottom: 20px;
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 18px;
+}
+
+.status-indicator.stopped {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.status-indicator.running {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.status-indicator.paused {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.status-indicator.error {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.status-indicator .status-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+}
+
+.status-indicator.stopped .status-dot {
+    background: #dc2626;
+}
+
+.status-indicator.running .status-dot {
+    background: #10b981;
+    animation: pulse 2s infinite;
+}
+
+.status-indicator.paused .status-dot {
+    background: #f59e0b;
+}
+
+.control-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+/* Buttons */
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-success {
+    background: #10b981;
+    color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+    background: #059669;
+}
+
+.btn-danger {
+    background: #ef4444;
+    color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: #dc2626;
+}
+
+.btn-warning {
+    background: #f59e0b;
+    color: white;
+}
+
+.btn-warning:hover:not(:disabled) {
+    background: #d97706;
+}
+
+.btn-info {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-info:hover:not(:disabled) {
+    background: #2563eb;
+}
+
+.btn-primary {
+    background: #667eea;
+    color: white;
+    width: 100%;
+    margin-top: 16px;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #5568d3;
+}
+
+/* Price Monitor */
+.price-display {
+    margin-bottom: 20px;
+}
+
+.current-price {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 8px;
+    color: white;
+    margin-bottom: 16px;
+}
+
+.current-price .label {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.current-price .value {
+    font-size: 32px;
+    font-weight: bold;
+}
+
+.price-levels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.level {
+    padding: 16px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sell-level {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.buy-level {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.level .label {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.level .value {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.price-chart {
+    margin-top: 20px;
+    height: 200px;
+}
+
+/* Trading Statistics */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+
+.stat-item {
+    padding: 16px;
+    background: #f9fafb;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.stat-item.pnl {
+    grid-column: 1 / -1;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.stat-label {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.stat-value {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.stat-value.success {
+    color: #10b981;
+}
+
+.stat-value.danger {
+    color: #ef4444;
+}
+
+/* Position Info */
+.no-position {
+    text-align: center;
+    padding: 40px;
+    color: #9ca3af;
+    font-size: 14px;
+}
+
+.position-details {
+    display: grid;
+    gap: 12px;
+}
+
+.position-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px;
+    background: #f9fafb;
+    border-radius: 8px;
+}
+
+.position-item.positive {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.position-item.negative {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+/* Configuration */
+.config-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.config-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.config-item label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #666;
+}
+
+.config-item input {
+    padding: 10px;
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: border-color 0.3s ease;
+}
+
+.config-item input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.config-item input:readonly {
+    background: #f9fafb;
+    color: #9ca3af;
+}
+
+/* Recent Trades */
+.trades-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.no-trades {
+    text-align: center;
+    padding: 40px;
+    color: #9ca3af;
+    font-size: 14px;
+}
+
+.trade-item {
+    padding: 12px;
+    border-left: 4px solid #e5e7eb;
+    margin-bottom: 12px;
+    background: #f9fafb;
+    border-radius: 4px;
+}
+
+.trade-item.buy {
+    border-left-color: #10b981;
+}
+
+.trade-item.sell {
+    border-left-color: #ef4444;
+}
+
+.trade-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.trade-type {
+    font-size: 14px;
+}
+
+.trade-type.buy {
+    color: #10b981;
+}
+
+.trade-type.sell {
+    color: #ef4444;
+}
+
+.trade-time {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+.trade-details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #666;
+}
+
+.trade-profit {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.trade-profit.positive {
+    color: #10b981;
+}
+
+.trade-profit.negative {
+    color: #ef4444;
+}
+
+/* Activity Log */
+.log-container {
+    max-height: 250px;
+    overflow-y: auto;
+    background: #f9fafb;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.log-entry {
+    padding: 8px;
+    font-size: 12px;
+    font-family: 'Courier New', monospace;
+    border-bottom: 1px solid #e5e7eb;
+    color: #666;
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.log-entry.error {
+    color: #ef4444;
+    font-weight: 600;
+}
+
+.log-entry.success {
+    color: #10b981;
+    font-weight: 600;
+}
+
+/* Animations */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}

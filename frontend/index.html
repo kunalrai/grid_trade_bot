@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOL/USDT Grid Trading Bot - CoinDCX</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>🤖 SOL/USDT Grid Trading Bot</h1>
+                <p class="subtitle">CoinDCX Futures Trading</p>
+            </div>
+            <div class="connection-status" id="connectionStatus">
+                <span class="status-dot"></span>
+                <span>Connecting...</span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Column -->
+            <div class="left-column">
+                <!-- Bot Control Panel -->
+                <div class="card control-panel">
+                    <h2>🎮 Bot Control</h2>
+                    <div class="bot-status" id="botStatus">
+                        <div class="status-indicator stopped">
+                            <span class="status-dot"></span>
+                            <span class="status-text">Stopped</span>
+                        </div>
+                    </div>
+                    <div class="control-buttons">
+                        <button id="startBtn" class="btn btn-success">▶ Start Bot</button>
+                        <button id="stopBtn" class="btn btn-danger" disabled>⏹ Stop Bot</button>
+                        <button id="pauseBtn" class="btn btn-warning" disabled>⏸ Pause</button>
+                        <button id="resumeBtn" class="btn btn-info" disabled>▶ Resume</button>
+                    </div>
+                </div>
+
+                <!-- Price Monitor -->
+                <div class="card price-monitor">
+                    <h2>💰 Price Monitor</h2>
+                    <div class="price-display">
+                        <div class="current-price">
+                            <span class="label">Current Price</span>
+                            <span class="value" id="currentPrice">$0.00</span>
+                        </div>
+                        <div class="price-levels">
+                            <div class="level sell-level">
+                                <span class="label">Sell Level</span>
+                                <span class="value" id="sellLevel">$143.00</span>
+                            </div>
+                            <div class="level buy-level">
+                                <span class="label">Buy Level</span>
+                                <span class="value" id="buyLevel">$138.00</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="price-chart">
+                        <canvas id="priceChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Trading Statistics -->
+                <div class="card trading-stats">
+                    <h2>📊 Trading Statistics</h2>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-label">Total Trades</span>
+                            <span class="stat-value" id="totalTrades">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Winning Trades</span>
+                            <span class="stat-value success" id="winningTrades">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Win Rate</span>
+                            <span class="stat-value" id="winRate">0%</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Cycles Completed</span>
+                            <span class="stat-value" id="cycles">0</span>
+                        </div>
+                        <div class="stat-item pnl">
+                            <span class="stat-label">Total P&L</span>
+                            <span class="stat-value" id="totalPnl">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column -->
+            <div class="right-column">
+                <!-- Current Position -->
+                <div class="card position-info">
+                    <h2>📍 Current Position</h2>
+                    <div id="positionContent">
+                        <div class="no-position">No active position</div>
+                    </div>
+                </div>
+
+                <!-- Configuration -->
+                <div class="card config-panel">
+                    <h2>⚙️ Configuration</h2>
+                    <div class="config-grid">
+                        <div class="config-item">
+                            <label>Market</label>
+                            <input type="text" id="configMarket" value="SOLUSDT" readonly>
+                        </div>
+                        <div class="config-item">
+                            <label>Position Size (SOL)</label>
+                            <input type="number" id="configPositionSize" value="10" step="0.1">
+                        </div>
+                        <div class="config-item">
+                            <label>Leverage</label>
+                            <input type="number" id="configLeverage" value="1" min="1" max="10">
+                        </div>
+                        <div class="config-item">
+                            <label>Buy Level ($)</label>
+                            <input type="number" id="configBuyLevel" value="138.00" step="0.01">
+                        </div>
+                        <div class="config-item">
+                            <label>Sell Level ($)</label>
+                            <input type="number" id="configSellLevel" value="143.00" step="0.01">
+                        </div>
+                        <div class="config-item">
+                            <label>Max Loss ($)</label>
+                            <input type="number" id="configMaxLoss" value="-50.00" step="1">
+                        </div>
+                    </div>
+                    <button id="saveConfigBtn" class="btn btn-primary">💾 Save Configuration</button>
+                </div>
+
+                <!-- Recent Trades -->
+                <div class="card recent-trades">
+                    <h2>📈 Recent Trades</h2>
+                    <div class="trades-list" id="tradesList">
+                        <div class="no-trades">No trades yet</div>
+                    </div>
+                </div>
+
+                <!-- Activity Log -->
+                <div class="card activity-log">
+                    <h2>📋 Activity Log</h2>
+                    <div class="log-container" id="activityLog">
+                        <div class="log-entry">System ready</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
