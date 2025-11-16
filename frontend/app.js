@@ -208,6 +208,46 @@ async function loadConfiguration() {
     }
 }
 
+function validateConfiguration(config) {
+    const errors = [];
+
+    // Validate trading configuration
+    if (config.trading.position_size <= 0) {
+        errors.push('Position size must be greater than 0');
+    }
+    if (config.trading.leverage < 1 || config.trading.leverage > 100) {
+        errors.push('Leverage must be between 1 and 100');
+    }
+    if (config.trading.buy_level <= 0) {
+        errors.push('Buy level must be greater than 0');
+    }
+    if (config.trading.sell_level <= 0) {
+        errors.push('Sell level must be greater than 0');
+    }
+    if (config.trading.buy_level >= config.trading.sell_level) {
+        errors.push('Buy level must be less than sell level');
+    }
+
+    // Validate safety configuration
+    if (config.safety.max_cumulative_loss >= 0) {
+        errors.push('Max cumulative loss must be negative (e.g., -50 for $50 max loss)');
+    }
+    if (config.safety.stop_loss_percentage <= 0 || config.safety.stop_loss_percentage > 100) {
+        errors.push('Stop loss percentage must be between 0 and 100');
+    }
+    if (config.safety.trading_range_min >= config.safety.trading_range_max) {
+        errors.push('Trading range min must be less than trading range max');
+    }
+    if (config.safety.support_level >= config.safety.resistance_level) {
+        errors.push('Support level must be less than resistance level');
+    }
+
+    return {
+        valid: errors.length === 0,
+        errors: errors
+    };
+}
+
 async function saveConfiguration() {
     try {
         const config = {
@@ -229,6 +269,13 @@ async function saveConfiguration() {
                 trading_range_max: parseFloat(document.getElementById('configTradingRangeMax').value)
             }
         };
+
+        // Validate configuration
+        const validation = validateConfiguration(config);
+        if (!validation.valid) {
+            addLog('Configuration validation failed: ' + validation.errors.join(', '), 'error');
+            return;
+        }
 
         const response = await fetch(`${API_BASE_URL}/api/config`, {
             method: 'PUT',

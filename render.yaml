@@ -1,0 +1,21 @@
+services:
+  # Web service for the Flask API and frontend
+  - type: web
+    name: grid-trading-bot
+    runtime: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT backend.api_server:app"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: COINDCX_API_KEY
+        sync: false
+      - key: COINDCX_API_SECRET
+        sync: false
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: PORT
+        value: 10000
+    healthCheckPath: /api/health
+    autoDeploy: true

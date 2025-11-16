@@ -50,8 +50,8 @@ class GridTraderCoinDCX:
         self.cumulative_pnl = 0.0
         self.total_trades = 0
         self.winning_trades = 0
-        self.is_running = True
-        self.bot_state = "initializing"
+        self.is_running = False  # Start as False, set to True when run() is called
+        self.bot_state = "stopped"  # Start as stopped
         self.error_message = None
 
         # Reporting
@@ -115,7 +115,8 @@ class GridTraderCoinDCX:
                 self.short_position = position
                 self.short_entry_price = position['entry_price']
 
-        self.bot_state = "running"
+        # Don't set bot_state to "running" here - let run() method do it
+        # bot_state will be "stopped" until run() is called
         return True
 
     def check_price_and_trade(self) -> bool:
@@ -802,9 +803,19 @@ class GridTraderCoinDCX:
 
     def run(self):
         """Main trading loop"""
+        print(f"[DEBUG] run() called. State: {self.bot_state}, Running: {self.is_running}")
+
         if not self.initialize():
+            print(f"[DEBUG] initialize() failed!")
             self.logger.error("Initialization failed. Exiting.")
+            self.is_running = False
+            # bot_state already set to "error" in initialize()
             return
+
+        # Set running state
+        self.is_running = True
+        self.bot_state = "running"
+        print(f"[DEBUG] State set to running. State: {self.bot_state}, Running: {self.is_running}")
 
         self.logger.info("🚀 Bot started. Monitoring price...")
 

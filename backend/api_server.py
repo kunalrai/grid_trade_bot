@@ -23,7 +23,11 @@ from grid_trader_coindcx import GridTraderCoinDCX
 load_dotenv()
 
 # Initialize Flask app
-app = Flask(__name__)
+# Set the frontend folder as the static folder and template folder
+frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend')
+app = Flask(__name__,
+            static_folder=frontend_dir,
+            static_url_path='')
 app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'your-secret-key-here')
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -88,12 +92,26 @@ def emit_status_update():
 def run_bot_loop():
     """Run the trading bot in a separate thread"""
     global trader
+    print(f"[DEBUG] run_bot_loop started. trader exists: {trader is not None}")
     if trader:
         try:
+            print(f"[DEBUG] About to call trader.run(). State: {trader.bot_state}, Running: {trader.is_running}")
             trader.run()
+            print(f"[DEBUG] trader.run() completed. State: {trader.bot_state}, Running: {trader.is_running}")
         except Exception as e:
+            print(f"[DEBUG] Exception in trader.run(): {str(e)}")
+            import traceback
+            traceback.print_exc()
             if logger:
                 logger.error(f"Bot error: {str(e)}")
+
+
+# ============== FRONTEND ROUTES ==============
+
+@app.route('/')
+def index():
+    """Serve the main frontend page"""
+    return app.send_static_file('index.html')
 
 
 # ============== API ENDPOINTS ==============
@@ -236,10 +254,17 @@ def start_bot():
 
         # Initialize trader
         trader = GridTraderCoinDCX(client, config, logger)
+        print(f"[DEBUG] Trader created. State: {trader.bot_state}, Running: {trader.is_running}")
+
+        # Set state to initializing before starting thread
+        trader.bot_state = "initializing"
+        trader.is_running = True
+        print(f"[DEBUG] State set to initializing. State: {trader.bot_state}, Running: {trader.is_running}")
 
         # Start bot in separate thread
         trader_thread = threading.Thread(target=run_bot_loop, daemon=True)
         trader_thread.start()
+        print(f"[DEBUG] Thread started")
 
         return jsonify({
             'success': True,
@@ -540,16 +565,22 @@ if __name__ == '__main__':
     print("=" * 60)
     print("Grid Trading Bot - API Server")
     print("=" * 60)
-    print("Server starting on http://localhost:5000")
-    print("WebSocket available at ws://localhost:5000")
+
+    # Get port from environment variable for production deployment
+    port = int(os.getenv('PORT', 5000))
+    debug = os.getenv('FLASK_ENV') != 'production'
+
+    print(f"Server starting on http://0.0.0.0:{port}")
+    print(f"WebSocket available at ws://0.0.0.0:{port}")
     print("=" * 60)
 
     # Load config at startup
     try:
         config = load_config()
         logger = TradingLogger()
-        print("✓ Configuration loaded successfully")
+        print("Configuration loaded successfully")
     except Exception as e:
-        print(f"⚠ Warning: Could not load config at startup: {e}")
+        print(f"Warning: Could not load config at startup: {e}")
 
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
+    # Disable reloader to prevent port binding issues
+    socketio.run(app, host='0.0.0.0', port=port, debug=debug, use_reloader=False, allow_unsafe_werkzeug=True)

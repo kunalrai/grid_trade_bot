@@ -9,7 +9,7 @@
     "trade_direction": "short"
   },
   "safety": {
-    "max_cumulative_loss": 1,
+    "max_cumulative_loss": -0.1,
     "stop_loss_percentage": 5,
     "support_level": 120,
     "resistance_level": 160,
