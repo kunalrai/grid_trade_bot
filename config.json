@@ -1,21 +1,13 @@
 {
   "trading": {
-    "symbol": "SOL/USDT",
     "market": "SOLUSDT",
-    "market_type": "future",
-    "buy_level": 138.00,
-    "sell_level": 143.00,
-    "grid_range": 5.00,
     "position_size": 10,
     "leverage": 1,
-    "order_type": "limit"
+    "buy_level": 138,
+    "sell_level": 144
   },
   "safety": {
-    "max_cumulative_loss": -50.0,
-    "support_level": 135.0,
-    "resistance_level": 146.0,
-    "trading_range_min": 135.0,
-    "trading_range_max": 146.0
+    "max_cumulative_loss": -50
   },
   "monitoring": {
     "check_interval_seconds": 60,

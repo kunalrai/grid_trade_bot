@@ -84,8 +84,15 @@ class CoinDCXFuturesClient:
             if method == "GET":
                 response = self.session.get(url, timeout=10)
             else:
-                headers = self._get_headers(payload) if payload else {}
-                response = self.session.post(url, json=payload, headers=headers, timeout=10)
+                if payload:
+                    # CRITICAL: Generate JSON string for signature, then use SAME string as body
+                    # This ensures signature matches the actual request body
+                    json_payload = json.dumps(payload, separators=(',', ':'))
+                    headers = self._get_headers(payload)
+                    # Use 'data' parameter with the JSON string, NOT 'json' parameter
+                    response = self.session.post(url, data=json_payload, headers=headers, timeout=10)
+                else:
+                    response = self.session.post(url, timeout=10)
 
             response.raise_for_status()
             result = response.json()
@@ -109,13 +116,22 @@ class CoinDCXFuturesClient:
             return None
 
     def test_connection(self) -> bool:
-        """Test API connection"""
+        """Test API connection using wallet endpoint (most reliable)"""
         try:
-            result = self.get_account_info()
-            if result:
+            # Use wallet details endpoint as it's more reliable than account info
+            result = self.get_wallet_details()
+            if result is not None:  # Even empty array is success
                 if self.logger:
                     self.logger.info("✓ CoinDCX API connection successful")
                 return True
+
+            # Fallback to account info
+            account_result = self.get_account_info()
+            if account_result:
+                if self.logger:
+                    self.logger.info("✓ CoinDCX API connection successful (via account info)")
+                return True
+
             return False
         except Exception as e:
             if self.logger:
