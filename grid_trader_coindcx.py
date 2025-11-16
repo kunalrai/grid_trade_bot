@@ -84,11 +84,8 @@ class GridTraderCoinDCX:
             self.error_message = error_msg
             return False
 
-        # Set leverage
-        if not self.client.set_leverage(self.market, self.leverage):
-            self.logger.warning("Could not set leverage, continuing anyway")
-
         # Display configuration
+        # Note: Leverage is set per-order in CoinDCX, not per-position
         self.logger.info(f"Trading Market: {self.market}")
         self.logger.info(f"Trade Direction: {self.trade_direction.upper()}")
         self.logger.info(f"Buy Level: ${self.buy_level:.2f}")

@@ -5,7 +5,8 @@
       "Bash(pip install:*)",
       "Bash(timeout:*)",
       "Bash(del \\.c:appsrepogrid_trade_botnul)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(if exist nul echo \"nul file exists\" else echo \"nul file does not exist\")"
     ],
     "deny": [],
     "ask": []

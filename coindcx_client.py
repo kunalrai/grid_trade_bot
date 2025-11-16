@@ -582,25 +582,6 @@ class CoinDCXFuturesClient:
             return float(ticker.get('last_price', 0))
         return None
 
-    def set_leverage(self, market: str, leverage: int) -> bool:
-        """
-        Set leverage for a market
-
-        Args:
-            market: Market symbol
-            leverage: Leverage value
-
-        Returns:
-            True if successful
-        """
-        payload = {
-            "market": market,
-            "leverage": leverage,
-            "timestamp": int(time.time() * 1000)
-        }
-        result = self._make_request("POST", "/exchange/v1/positions/leverage", payload)
-
-        if result and self.logger:
-            self.logger.info(f"Leverage set to {leverage}x for {market}")
-
-        return result is not None
+    # Note: CoinDCX sets leverage per-order, not per-position
+    # Leverage is specified in the order payload when creating futures orders
+    # See create_futures_order() method
