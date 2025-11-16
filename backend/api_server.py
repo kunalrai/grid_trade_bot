@@ -75,13 +75,73 @@ def health_check():
     return jsonify({'status': 'ok', 'timestamp': datetime.now().isoformat()})
 
 
+@app.route('/api/test/connection', methods=['GET'])
+def test_api_connection():
+    """Test CoinDCX API connection"""
+    try:
+        api_key = os.getenv('COINDCX_API_KEY')
+        api_secret = os.getenv('COINDCX_API_SECRET')
+
+        if not api_key or not api_secret:
+            return jsonify({
+                'success': False,
+                'error': 'API credentials not configured in .env file'
+            }), 400
+
+        # Create test client
+        test_client = CoinDCXFuturesClient(
+            api_key=api_key,
+            api_secret=api_secret,
+            logger=None
+        )
+
+        # Test 1: Get wallet details (GET request)
+        wallet_result = test_client.get_wallet_details()
+
+        # Test 2: Get account info (POST request)
+        account_result = test_client.get_account_info()
+
+        results = {
+            'success': True,
+            'tests': {
+                'wallet_api': {
+                    'success': wallet_result is not None,
+                    'data': wallet_result if wallet_result else 'Failed'
+                },
+                'account_api': {
+                    'success': account_result is not None,
+                    'data': account_result if account_result else 'Failed'
+                }
+            },
+            'credentials': {
+                'api_key_set': bool(api_key),
+                'api_secret_set': bool(api_secret),
+                'api_key_prefix': api_key[:8] + '...' if api_key else None
+            }
+        }
+
+        return jsonify(results)
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/config', methods=['GET'])
 def get_config():
     """Get current configuration"""
     global config
-    if config:
-        return jsonify(config)
-    return jsonify({'error': 'Configuration not loaded'}), 500
+
+    # Load config if not already loaded
+    if not config:
+        try:
+            config = load_config()
+        except Exception as e:
+            return jsonify({'error': f'Failed to load config: {str(e)}'}), 500
+
+    return jsonify(config)
 
 
 @app.route('/api/config', methods=['PUT'])
@@ -360,11 +420,26 @@ def get_wallet_details():
     """Get detailed wallet information"""
     global trader
 
-    if not trader or not trader.client:
-        return jsonify({'error': 'Bot not initialized'}), 400
-
     try:
-        wallet_details = trader.client.get_wallet_details()
+        # If bot is running, use existing client
+        if trader and trader.client:
+            wallet_details = trader.client.get_wallet_details()
+        else:
+            # Create a temporary client to fetch wallet details
+            api_key = os.getenv('COINDCX_API_KEY')
+            api_secret = os.getenv('COINDCX_API_SECRET')
+
+            if not api_key or not api_secret:
+                return jsonify({'error': 'API credentials not configured'}), 400
+
+            # Create temporary client
+            temp_client = CoinDCXFuturesClient(
+                api_key=api_key,
+                api_secret=api_secret,
+                logger=None
+            )
+            wallet_details = temp_client.get_wallet_details()
+
         if wallet_details:
             return jsonify({
                 'success': True,
