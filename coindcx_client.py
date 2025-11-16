@@ -140,12 +140,17 @@ class CoinDCXFuturesClient:
         Get account information
 
         Returns:
-            Account details
+            Account details (first user object from array response)
         """
         payload = {
             "timestamp": int(time.time() * 1000)
         }
-        return self._make_request("POST", "/exchange/v1/users/info", payload)
+        result = self._make_request("POST", "/exchange/v1/users/info", payload)
+
+        # API returns an array, extract the first element
+        if result and isinstance(result, list) and len(result) > 0:
+            return result[0]
+        return result
 
     def get_balance(self) -> Optional[Dict[str, float]]:
         """
