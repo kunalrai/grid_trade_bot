@@ -176,10 +176,42 @@ class CoinDCXFuturesClient:
             Futures balance information
         """
         payload = {
-            "timestamp": int(time.time() * 1000),
-            "wallet_type": "futures"
+            "timestamp": int(time.time() * 1000)
         }
-        return self._make_request("POST", "/exchange/v1/users/wallet_balance", payload)
+        return self._make_request("POST", "/exchange/v1/wallet/balance", payload)
+
+    def get_wallet_details(self) -> Optional[List[Dict[str, Any]]]:
+        """
+        Get futures wallet details including all balances and locked amounts
+
+        Returns:
+            List of wallet details with balance information
+        """
+        payload = {
+            "timestamp": int(time.time() * 1000)
+        }
+
+        # Note: This endpoint uses GET method but still requires authentication
+        url = f"{self.base_url}/exchange/v1/derivatives/futures/wallets"
+
+        try:
+            json_payload = json.dumps(payload, separators=(',', ':'))
+            signature = self._generate_signature(json_payload)
+
+            headers = {
+                'Content-Type': 'application/json',
+                'X-AUTH-APIKEY': self.api_key,
+                'X-AUTH-SIGNATURE': signature
+            }
+
+            response = self.session.get(url, data=json_payload, headers=headers, timeout=10)
+            response.raise_for_status()
+            return response.json()
+
+        except requests.exceptions.RequestException as e:
+            if self.logger:
+                self.logger.error(f"API request failed: {str(e)}")
+            return None
 
     def transfer_to_futures(self, currency: str, amount: float) -> bool:
         """
@@ -226,18 +258,18 @@ class CoinDCXFuturesClient:
             "side": side,
             "order_type": order_type,
             "market": market,
-            "quantity": str(quantity),
+            "total_quantity": quantity,
             "timestamp": int(time.time() * 1000),
             "client_order_id": f"grid_{int(time.time() * 1000)}"
         }
 
         if order_type == "limit_order" and price:
-            payload["price_per_unit"] = str(price)
+            payload["price_per_unit"] = price
 
         if leverage:
             payload["leverage"] = leverage
 
-        result = self._make_request("POST", "/exchange/v1/futures/create_order", payload)
+        result = self._make_request("POST", "/exchange/v1/orders/create", payload)
 
         if result and self.logger:
             self.logger.info(f"Futures {side} order created: {quantity} {market} @ {price if price else 'market'}")
@@ -273,23 +305,22 @@ class CoinDCXFuturesClient:
         """
         return self.create_futures_order(market, side, "limit_order", quantity, price)
 
-    def get_active_orders(self, market: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
+    def get_active_orders(self, market: str) -> Optional[List[Dict[str, Any]]]:
         """
         Get active orders
 
         Args:
-            market: Filter by market (optional)
+            market: Market symbol (required)
 
         Returns:
             List of active orders
         """
         payload = {
+            "market": market,
             "timestamp": int(time.time() * 1000)
         }
-        if market:
-            payload["market"] = market
 
-        return self._make_request("POST", "/exchange/v1/futures/active_orders", payload)
+        return self._make_request("POST", "/exchange/v1/orders/active_orders", payload)
 
     def cancel_order(self, order_id: str) -> bool:
         """
@@ -305,7 +336,7 @@ class CoinDCXFuturesClient:
             "id": order_id,
             "timestamp": int(time.time() * 1000)
         }
-        result = self._make_request("POST", "/exchange/v1/futures/cancel_order", payload)
+        result = self._make_request("POST", "/exchange/v1/orders/cancel", payload)
 
         if result and self.logger:
             self.logger.info(f"Order {order_id} cancelled")
@@ -343,7 +374,7 @@ class CoinDCXFuturesClient:
         payload = {
             "timestamp": int(time.time() * 1000)
         }
-        return self._make_request("POST", "/exchange/v1/futures/positions", payload)
+        return self._make_request("POST", "/exchange/v1/positions/list", payload)
 
     def get_position(self, market: str) -> Optional[Dict[str, Any]]:
         """
@@ -369,9 +400,30 @@ class CoinDCXFuturesClient:
                     }
         return None
 
+    def exit_position(self, pair: str) -> bool:
+        """
+        Exit position using CoinDCX exit position API
+
+        Args:
+            pair: Trading pair (e.g., 'SOLUSDT')
+
+        Returns:
+            True if successful
+        """
+        payload = {
+            "pair": pair,
+            "timestamp": int(time.time() * 1000)
+        }
+        result = self._make_request("POST", "/exchange/v1/positions/exit", payload)
+
+        if result and self.logger:
+            self.logger.info(f"Position exited for {pair}")
+
+        return result is not None
+
     def close_position(self, market: str) -> bool:
         """
-        Close position for market
+        Close position for market (using exit position API first, fallback to market order)
 
         Args:
             market: Market symbol
@@ -379,11 +431,15 @@ class CoinDCXFuturesClient:
         Returns:
             True if successful
         """
+        # Try using the exit position API first
+        if self.exit_position(market):
+            return True
+
+        # Fallback: Place opposite order to close position
         position = self.get_position(market)
         if not position:
             return True
 
-        # Place opposite order to close position
         side = 'sell' if position['side'] == 'long' else 'buy'
         quantity = abs(position['size'])
 
@@ -408,7 +464,7 @@ class CoinDCXFuturesClient:
         if market:
             payload["market"] = market
 
-        return self._make_request("POST", "/exchange/v1/futures/order_history", payload)
+        return self._make_request("POST", "/exchange/v1/orders/list", payload)
 
     def get_current_price(self, market: str) -> Optional[float]:
         """
@@ -441,7 +497,7 @@ class CoinDCXFuturesClient:
             "leverage": leverage,
             "timestamp": int(time.time() * 1000)
         }
-        result = self._make_request("POST", "/exchange/v1/futures/set_leverage", payload)
+        result = self._make_request("POST", "/exchange/v1/positions/leverage", payload)
 
         if result and self.logger:
             self.logger.info(f"Leverage set to {leverage}x for {market}")

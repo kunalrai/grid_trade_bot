@@ -355,6 +355,47 @@ def get_statistics():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/wallet/details', methods=['GET'])
+def get_wallet_details():
+    """Get detailed wallet information"""
+    global trader
+
+    if not trader or not trader.client:
+        return jsonify({'error': 'Bot not initialized'}), 400
+
+    try:
+        wallet_details = trader.client.get_wallet_details()
+        if wallet_details:
+            return jsonify({
+                'success': True,
+                'wallet': wallet_details
+            })
+        return jsonify({'error': 'Failed to fetch wallet details'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/logs', methods=['GET'])
+def get_logs():
+    """Get recent log entries"""
+    global logger
+
+    if not logger:
+        return jsonify({'error': 'Logger not initialized'}), 400
+
+    try:
+        limit = int(request.args.get('limit', 100))
+        # Get recent logs from logger
+        logs = logger.get_recent_logs(limit) if hasattr(logger, 'get_recent_logs') else []
+
+        return jsonify({
+            'success': True,
+            'logs': logs
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # ============== WEBSOCKET EVENTS ==============
 
 @socketio.on('connect')

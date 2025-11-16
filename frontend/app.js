@@ -86,9 +86,15 @@ function initializePriceChart() {
 function initializeEventListeners() {
     document.getElementById('startBtn').addEventListener('click', startBot);
     document.getElementById('stopBtn').addEventListener('click', stopBot);
-    document.getElementById('pauseBtn').addEventListener('click', pauseBot);
+    document.getElementById('pauseBtn').addEventListener('click', pauseBtn);
     document.getElementById('resumeBtn').addEventListener('click', resumeBot);
     document.getElementById('saveConfigBtn').addEventListener('click', saveConfiguration);
+    document.getElementById('refreshWalletBtn').addEventListener('click', loadWalletDetails);
+    document.getElementById('clearLogBtn').addEventListener('click', clearLog);
+    document.getElementById('refreshLogBtn').addEventListener('click', loadDetailedLogs);
+
+    // Load wallet details on startup
+    loadWalletDetails();
 }
 
 // API Calls
@@ -412,9 +418,169 @@ function addLog(message, type = '') {
     }
 }
 
+// Wallet Details Functions
+async function loadWalletDetails() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/wallet/details`);
+        const data = await response.json();
+
+        const walletContent = document.getElementById('walletContent');
+
+        if (data.success && data.wallet) {
+            const walletData = data.wallet;
+
+            // Display wallet balances
+            let walletHTML = '<div class="wallet-info">';
+
+            // Check if wallet data is an array (new format)
+            if (Array.isArray(walletData) && walletData.length > 0) {
+                walletHTML += '<div class="balance-list">';
+                walletData.forEach(item => {
+                    const currency = item.currency_short_name || item.currency || item.asset;
+                    const balance = parseFloat(item.balance || 0);
+                    const locked = parseFloat(item.locked_balance || item.locked || 0);
+                    const crossMargin = parseFloat(item.cross_user_margin || 0);
+
+                    if (balance > 0 || locked > 0 || crossMargin > 0) {
+                        walletHTML += `
+                            <div class="balance-item">
+                                <span class="currency">${currency}</span>
+                                <div class="amounts">
+                                    <span class="available">Balance: ${balance}</span>
+                                    ${locked > 0 ? `<span class="locked">Locked: ${locked}</span>` : ''}
+                                    ${crossMargin > 0 ? `<span class="margin">Margin: ${crossMargin}</span>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+                walletHTML += '</div>';
+            } else {
+                walletHTML += '<div class="no-balance">No balance information available</div>';
+            }
+
+            walletHTML += '</div>';
+            walletContent.innerHTML = walletHTML;
+            addLog('Wallet details loaded', 'success');
+        } else {
+            walletContent.innerHTML = '<div class="wallet-error">Failed to load wallet details</div>';
+            addLog('Failed to load wallet: ' + (data.error || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        document.getElementById('walletContent').innerHTML = '<div class="wallet-error">Error loading wallet</div>';
+        addLog('Error loading wallet: ' + error.message, 'error');
+    }
+}
+
+// Detailed Logging Functions
+let logEntries = [];
+let errorCount = 0;
+
+async function loadDetailedLogs() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/logs?limit=100`);
+        const data = await response.json();
+
+        if (data.success && data.logs) {
+            logEntries = data.logs;
+            displayLogs();
+            addLog('Logs refreshed', 'success');
+        }
+    } catch (error) {
+        addLog('Error loading logs: ' + error.message, 'error');
+    }
+}
+
+function displayLogs() {
+    const logContainer = document.getElementById('activityLog');
+    logContainer.innerHTML = '';
+
+    logEntries.forEach(log => {
+        const logEntry = document.createElement('div');
+        logEntry.className = 'log-entry ' + (log.level || '');
+
+        const timestamp = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '';
+        logEntry.textContent = `[${timestamp}] ${log.message}`;
+
+        logContainer.appendChild(logEntry);
+    });
+
+    updateLogStats();
+}
+
+function clearLog() {
+    const logContainer = document.getElementById('activityLog');
+    logContainer.innerHTML = '<div class="log-entry">Log cleared</div>';
+    logEntries = [];
+    errorCount = 0;
+    updateLogStats();
+}
+
+function updateLogStats() {
+    // Count errors
+    errorCount = logEntries.filter(log =>
+        log.level === 'error' || log.level === 'ERROR' || log.message.toLowerCase().includes('error')
+    ).length;
+
+    document.getElementById('logCount').textContent = `${logEntries.length} entries`;
+    document.getElementById('errorCount').textContent = `${errorCount} errors`;
+}
+
+// Enhanced addLog function with better categorization
+function addLog(message, type = '') {
+    const logContainer = document.getElementById('activityLog');
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = document.createElement('div');
+
+    // Determine log type
+    let logClass = type;
+    if (!logClass) {
+        if (message.toLowerCase().includes('error') || message.toLowerCase().includes('failed')) {
+            logClass = 'error';
+        } else if (message.toLowerCase().includes('success') || message.toLowerCase().includes('started')) {
+            logClass = 'success';
+        } else if (message.toLowerCase().includes('warning')) {
+            logClass = 'warning';
+        }
+    }
+
+    logEntry.className = 'log-entry ' + logClass;
+    logEntry.innerHTML = `
+        <span class="log-time">[${timestamp}]</span>
+        <span class="log-message">${message}</span>
+    `;
+
+    logContainer.insertBefore(logEntry, logContainer.firstChild);
+
+    // Update entries array
+    logEntries.unshift({
+        timestamp: new Date().toISOString(),
+        message: message,
+        level: logClass
+    });
+
+    // Keep only last 100 entries
+    while (logContainer.children.length > 100) {
+        logContainer.removeChild(logContainer.lastChild);
+    }
+
+    if (logEntries.length > 100) {
+        logEntries = logEntries.slice(0, 100);
+    }
+
+    updateLogStats();
+}
+
 // Periodic updates
 setInterval(() => {
     if (socket && socket.connected) {
         socket.emit('request_status');
     }
 }, 5000);
+
+// Periodic wallet refresh (every 30 seconds)
+setInterval(() => {
+    if (socket && socket.connected) {
+        loadWalletDetails();
+    }
+}, 30000);

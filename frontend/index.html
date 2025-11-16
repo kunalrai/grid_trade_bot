@@ -97,6 +97,15 @@
 
             <!-- Right Column -->
             <div class="right-column">
+                <!-- Wallet Details -->
+                <div class="card wallet-details">
+                    <h2>💼 Futures Wallet</h2>
+                    <div id="walletContent">
+                        <div class="wallet-loading">Loading wallet details...</div>
+                    </div>
+                    <button id="refreshWalletBtn" class="btn btn-secondary btn-sm">🔄 Refresh</button>
+                </div>
+
                 <!-- Current Position -->
                 <div class="card position-info">
                     <h2>📍 Current Position</h2>
@@ -145,9 +154,19 @@
                     </div>
                 </div>
 
-                <!-- Activity Log -->
+                <!-- Detailed Activity Log -->
                 <div class="card activity-log">
-                    <h2>📋 Activity Log</h2>
+                    <div class="log-header">
+                        <h2>📋 Detailed Activity Log</h2>
+                        <div class="log-controls">
+                            <button id="clearLogBtn" class="btn btn-secondary btn-sm">🗑️ Clear</button>
+                            <button id="refreshLogBtn" class="btn btn-secondary btn-sm">🔄 Refresh</button>
+                        </div>
+                    </div>
+                    <div class="log-stats">
+                        <span class="log-stat" id="logCount">0 entries</span>
+                        <span class="log-stat error-count" id="errorCount">0 errors</span>
+                    </div>
                     <div class="log-container" id="activityLog">
                         <div class="log-entry">System ready</div>
                     </div>
