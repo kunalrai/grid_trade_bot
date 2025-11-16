@@ -7,6 +7,12 @@ let socket = null;
 let priceChart = null;
 let priceHistory = [];
 const MAX_PRICE_HISTORY = 50;
+let gridLevels = {
+    buyLevel: 139,
+    sellLevel: 143,
+    supportLevel: 120,
+    resistanceLevel: 160
+};
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -47,22 +53,97 @@ function initializePriceChart() {
         type: 'line',
         data: {
             labels: [],
-            datasets: [{
-                label: 'SOL/USDT Price',
-                data: [],
-                borderColor: '#667eea',
-                backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                borderWidth: 2,
-                tension: 0.4,
-                fill: true
-            }]
+            datasets: [
+                {
+                    label: 'SOL/USDT Price',
+                    data: [],
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true,
+                    order: 1
+                },
+                {
+                    label: 'Buy Level',
+                    data: [],
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    fill: false,
+                    order: 2
+                },
+                {
+                    label: 'Sell Level',
+                    data: [],
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    pointRadius: 0,
+                    fill: false,
+                    order: 2
+                },
+                {
+                    label: 'Support Level',
+                    data: [],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                    borderWidth: 1,
+                    borderDash: [2, 4],
+                    pointRadius: 0,
+                    fill: false,
+                    order: 3
+                },
+                {
+                    label: 'Resistance Level',
+                    data: [],
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.05)',
+                    borderWidth: 1,
+                    borderDash: [2, 4],
+                    pointRadius: 0,
+                    fill: false,
+                    order: 3
+                }
+            ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    display: false
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        color: '#9ca3af',
+                        font: {
+                            size: 11
+                        },
+                        usePointStyle: true,
+                        padding: 10,
+                        filter: function(item) {
+                            return item.text !== 'SOL/USDT Price';
+                        }
+                    }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed.y !== null) {
+                                label += '$' + context.parsed.y.toFixed(2);
+                            }
+                            return label;
+                        }
+                    }
                 }
             },
             scales: {
@@ -71,12 +152,21 @@ function initializePriceChart() {
                     ticks: {
                         callback: function(value) {
                             return '$' + value.toFixed(2);
-                        }
+                        },
+                        color: '#9ca3af'
+                    },
+                    grid: {
+                        color: 'rgba(75, 85, 99, 0.3)'
                     }
                 },
                 x: {
                     display: false
                 }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
             }
         }
     });
@@ -191,6 +281,10 @@ async function loadConfiguration() {
             // Update display
             document.getElementById('buyLevel').textContent = '$' + (config.trading.buy_level || 138).toFixed(2);
             document.getElementById('sellLevel').textContent = '$' + (config.trading.sell_level || 143).toFixed(2);
+
+            // Update grid levels
+            gridLevels.buyLevel = config.trading.buy_level || 138;
+            gridLevels.sellLevel = config.trading.sell_level || 143;
         }
 
         if (config.safety) {
@@ -200,7 +294,14 @@ async function loadConfiguration() {
             document.getElementById('configResistanceLevel').value = config.safety.resistance_level || 160;
             document.getElementById('configTradingRangeMin').value = config.safety.trading_range_min || 100;
             document.getElementById('configTradingRangeMax').value = config.safety.trading_range_max || 180;
+
+            // Update grid levels
+            gridLevels.supportLevel = config.safety.support_level || 120;
+            gridLevels.resistanceLevel = config.safety.resistance_level || 160;
         }
+
+        // Update chart grid lines
+        updateChartGridLines();
 
         addLog('Configuration loaded');
     } catch (error) {
@@ -292,6 +393,15 @@ async function saveConfiguration() {
             // Update display
             document.getElementById('buyLevel').textContent = '$' + config.trading.buy_level.toFixed(2);
             document.getElementById('sellLevel').textContent = '$' + config.trading.sell_level.toFixed(2);
+
+            // Update grid levels
+            gridLevels.buyLevel = config.trading.buy_level;
+            gridLevels.sellLevel = config.trading.sell_level;
+            gridLevels.supportLevel = config.safety.support_level;
+            gridLevels.resistanceLevel = config.safety.resistance_level;
+
+            // Update chart grid lines
+            updateChartGridLines();
         } else {
             addLog('Failed to save configuration: ' + data.error, 'error');
         }
@@ -399,7 +509,30 @@ function updatePriceChart(price) {
 
     priceChart.data.labels = priceHistory.map(p => p.time);
     priceChart.data.datasets[0].data = priceHistory.map(p => p.price);
+
+    // Update grid lines
+    updateChartGridLines();
+
     priceChart.update('none');
+}
+
+// Helper function to update chart grid lines
+function updateChartGridLines() {
+    if (!priceChart || !priceChart.data.labels.length) return;
+
+    const dataLength = priceChart.data.labels.length;
+
+    // Update Buy Level (dataset 1)
+    priceChart.data.datasets[1].data = new Array(dataLength).fill(gridLevels.buyLevel);
+
+    // Update Sell Level (dataset 2)
+    priceChart.data.datasets[2].data = new Array(dataLength).fill(gridLevels.sellLevel);
+
+    // Update Support Level (dataset 3)
+    priceChart.data.datasets[3].data = new Array(dataLength).fill(gridLevels.supportLevel);
+
+    // Update Resistance Level (dataset 4)
+    priceChart.data.datasets[4].data = new Array(dataLength).fill(gridLevels.resistanceLevel);
 }
 
 function updatePosition(position) {

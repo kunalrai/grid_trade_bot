@@ -579,6 +579,29 @@ if __name__ == '__main__':
         config = load_config()
         logger = TradingLogger()
         print("Configuration loaded successfully")
+
+        # Auto-start bot if configured
+        if config.get('monitoring', {}).get('auto_start_bot', False):
+            print("\n🚀 Auto-starting trading bot...")
+            try:
+                # Initialize trader
+                api_key = os.getenv('COINDCX_API_KEY')
+                api_secret = os.getenv('COINDCX_API_SECRET')
+
+                if not api_key or not api_secret:
+                    print("⚠️  Warning: CoinDCX API credentials not found. Bot will not auto-start.")
+                    print("   Set COINDCX_API_KEY and COINDCX_API_SECRET environment variables.")
+                else:
+                    client = CoinDCXFuturesClient(api_key, api_secret, logger)
+                    trader = GridTraderCoinDCX(client, config, logger)
+
+                    # Start bot in background thread
+                    trader_thread = threading.Thread(target=trader.run, daemon=True)
+                    trader_thread.start()
+                    print("✅ Trading bot auto-started successfully!")
+            except Exception as e:
+                print(f"❌ Failed to auto-start bot: {e}")
+
     except Exception as e:
         print(f"Warning: Could not load config at startup: {e}")
 

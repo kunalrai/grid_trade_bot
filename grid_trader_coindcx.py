@@ -2,10 +2,12 @@
 Grid Trading Strategy Implementation for CoinDCX
 """
 import time
+import asyncio
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from coindcx_client import CoinDCXFuturesClient
 from logger import TradingLogger
+from telegram_notifier import TelegramNotifier
 
 
 class GridTraderCoinDCX:
@@ -23,6 +25,12 @@ class GridTraderCoinDCX:
         self.client = client
         self.config = config
         self.logger = logger
+
+        # Initialize Telegram notifier
+        self.telegram = None
+        self.telegram_loop = None  # Store event loop reference
+        if config['monitoring'].get('enable_telegram_alerts', False):
+            self.telegram = TelegramNotifier(logger=logger)
 
         # Trading parameters
         self.market = config['trading']['market']  # e.g., 'SOLUSDT'
@@ -59,6 +67,18 @@ class GridTraderCoinDCX:
         self.last_daily_report = datetime.now()
         self.hourly_trades_start = 0
         self.daily_trades_start = 0
+
+    def _send_telegram(self, coro):
+        """Helper to send Telegram notifications asynchronously"""
+        if self.telegram and self.telegram.enabled:
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(coro)
+                else:
+                    loop.run_until_complete(coro)
+            except Exception as e:
+                self.logger.error(f"Error sending Telegram notification: {e}")
 
     def initialize(self) -> bool:
         """
@@ -287,6 +307,9 @@ class GridTraderCoinDCX:
                 self.long_position = {'side': 'long', 'size': position_size, 'entry_price': execution_price}
                 self.logger.trade_execution('LONG ENTRY (BUY)', position_size, execution_price)
 
+                # Send Telegram notification
+                self._send_telegram(self.telegram.notify_trade('BUY', position_size, execution_price, self.market))
+
                 # Record trade
                 self.trades.append({
                     'timestamp': datetime.now(),
@@ -338,6 +361,9 @@ class GridTraderCoinDCX:
                     self.winning_trades += 1
 
                 self.logger.trade_execution('LONG EXIT (SELL)', position_size, execution_price, profit)
+
+                # Send Telegram notification
+                self._send_telegram(self.telegram.notify_trade('SELL', position_size, execution_price, self.market))
 
                 # Record trade
                 self.trades.append({
@@ -814,6 +840,26 @@ class GridTraderCoinDCX:
         self.bot_state = "running"
         print(f"[DEBUG] State set to running. State: {self.bot_state}, Running: {self.is_running}")
 
+        # Start Telegram bot if enabled
+        if self.telegram and self.telegram.enabled:
+            try:
+                import threading
+
+                def run_telegram_bot():
+                    """Run Telegram bot in separate thread with its own event loop"""
+                    self.telegram_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(self.telegram_loop)
+                    self.telegram_loop.run_until_complete(self.telegram.start_bot(self))
+                    # Keep the loop running for polling
+                    self.telegram_loop.run_forever()
+
+                telegram_thread = threading.Thread(target=run_telegram_bot, daemon=True)
+                telegram_thread.start()
+                time.sleep(3)  # Give it time to initialize and start polling
+                self.logger.info("Telegram bot started successfully in background thread")
+            except Exception as e:
+                self.logger.error(f"Failed to start Telegram bot: {e}")
+
         self.logger.info("🚀 Bot started. Monitoring price...")
 
         check_interval = self.config['monitoring']['check_interval_seconds']
@@ -847,6 +893,23 @@ class GridTraderCoinDCX:
         """Stop the bot"""
         self.is_running = False
         self.bot_state = "stopped"
+
+        # Stop Telegram bot if running
+        if self.telegram and self.telegram.enabled and self.telegram_loop:
+            try:
+                # Schedule the stop in the telegram event loop
+                asyncio.run_coroutine_threadsafe(
+                    self.telegram.notify_bot_stopped("User requested stop"),
+                    self.telegram_loop
+                )
+                asyncio.run_coroutine_threadsafe(
+                    self.telegram.stop_bot(),
+                    self.telegram_loop
+                )
+                # Stop the loop
+                self.telegram_loop.call_soon_threadsafe(self.telegram_loop.stop)
+            except Exception as e:
+                self.logger.error(f"Error stopping Telegram bot: {e}")
 
     def pause(self):
         """Pause the bot"""

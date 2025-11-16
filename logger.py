@@ -27,8 +27,9 @@ class TradingLogger:
         # Clear existing handlers
         self.logger.handlers = []
 
-        # Console handler
-        console_handler = logging.StreamHandler()
+        # Console handler with UTF-8 encoding for Windows
+        import sys
+        console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(logging.INFO)
         console_format = logging.Formatter(
             '[%(asctime)s] %(levelname)s: %(message)s',
@@ -36,12 +37,19 @@ class TradingLogger:
         )
         console_handler.setFormatter(console_format)
 
-        # File handler
+        # Set UTF-8 encoding for console output on Windows
+        if sys.platform == 'win32':
+            try:
+                sys.stdout.reconfigure(encoding='utf-8')
+            except AttributeError:
+                pass  # Python < 3.7
+
+        # File handler with UTF-8 encoding
         log_file = os.path.join(
             self.log_dir,
             f"trading_{datetime.now().strftime('%Y%m%d')}.log"
         )
-        file_handler = logging.FileHandler(log_file)
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
         file_handler.setLevel(logging.INFO)
         file_format = logging.Formatter(
             '[%(asctime)s] %(levelname)s: %(message)s',
