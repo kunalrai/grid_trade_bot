@@ -130,6 +130,17 @@ body {
     color: #991b1b;
 }
 
+.error-message {
+    margin-top: 12px;
+    padding: 12px;
+    background: #fef2f2;
+    border-left: 4px solid #ef4444;
+    border-radius: 6px;
+    color: #991b1b;
+    font-size: 14px;
+    font-weight: 500;
+}
+
 .status-indicator .status-dot {
     width: 14px;
     height: 14px;

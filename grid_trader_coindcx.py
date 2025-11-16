@@ -48,6 +48,7 @@ class GridTraderCoinDCX:
         self.winning_trades = 0
         self.is_running = True
         self.bot_state = "initializing"
+        self.error_message = None
 
         # Reporting
         self.last_hourly_report = datetime.now()
@@ -68,8 +69,15 @@ class GridTraderCoinDCX:
 
         # Test connection
         if not self.client.test_connection():
-            self.logger.error("Failed to connect to CoinDCX API")
+            error_msg = "API Connection Failed - Check credentials in .env file"
+            self.logger.error(f"Failed to connect to CoinDCX API - {error_msg}")
+            self.logger.error("Common issues:")
+            self.logger.error("  1. Wrong API key or secret")
+            self.logger.error("  2. API key doesn't have futures trading permissions")
+            self.logger.error("  3. IP whitelist restriction on CoinDCX")
+            self.logger.error("  4. API endpoint /exchange/v1/users/info returning 401/403")
             self.bot_state = "error"
+            self.error_message = error_msg
             return False
 
         # Set leverage
@@ -297,7 +305,7 @@ class GridTraderCoinDCX:
         current_price = self.client.get_current_price(self.market)
         position = self.client.get_position(self.market)
 
-        return {
+        status = {
             'state': self.bot_state,
             'is_running': self.is_running,
             'current_price': current_price,
@@ -311,6 +319,12 @@ class GridTraderCoinDCX:
             'entry_price': self.entry_price,
             'recent_trades': self.trades[-10:] if len(self.trades) > 0 else []
         }
+
+        # Add error message if in error state
+        if self.bot_state == "error" and self.error_message:
+            status['error'] = self.error_message
+
+        return status
 
     def run(self):
         """Main trading loop"""

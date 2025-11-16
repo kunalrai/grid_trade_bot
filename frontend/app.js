@@ -261,11 +261,19 @@ function updateBotStatus(status) {
     let statusText = state.charAt(0).toUpperCase() + state.slice(1);
     let statusClass = state;
 
+    // Add error message if present
+    let errorHTML = '';
+    if (state === 'error' && status.error) {
+        errorHTML = `<div class="error-message">${status.error}</div>`;
+        addLog('Bot Error: ' + status.error, 'error');
+    }
+
     statusEl.innerHTML = `
         <div class="status-indicator ${statusClass}">
             <span class="status-dot"></span>
             <span class="status-text">${statusText}</span>
         </div>
+        ${errorHTML}
     `;
 
     // Update control buttons
