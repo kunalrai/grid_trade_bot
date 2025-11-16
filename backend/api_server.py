@@ -50,10 +50,39 @@ def load_config(config_file: str = "../config.json") -> dict:
 
 def emit_status_update():
     """Emit bot status update via WebSocket"""
-    global trader
-    if trader:
-        status = trader.get_status()
-        socketio.emit('status_update', status)
+    global trader, config, logger
+    try:
+        if trader:
+            status = trader.get_status()
+            socketio.emit('status_update', status)
+        else:
+            # Bot not started yet - return basic status with current price
+            if config:
+                try:
+                    api_key = os.getenv('COINDCX_API_KEY')
+                    api_secret = os.getenv('COINDCX_API_SECRET')
+                    if api_key and api_secret:
+                        client = CoinDCXFuturesClient(api_key, api_secret, logger)
+                        current_price = client.get_current_price(config['trading']['market'])
+                        status = {
+                            'state': 'stopped',
+                            'is_running': False,
+                            'current_price': current_price,
+                            'total_trades': 0,
+                            'winning_trades': 0,
+                            'win_rate': 0,
+                            'cumulative_pnl': 0,
+                            'cycles_completed': 0,
+                            'has_position': False,
+                            'position': None,
+                            'entry_price': None,
+                            'recent_trades': []
+                        }
+                        socketio.emit('status_update', status)
+                except Exception as e:
+                    print(f"Error fetching price for stopped bot: {e}")
+    except Exception as e:
+        print(f"Error emitting status update: {e}")
 
 
 def run_bot_loop():
@@ -514,5 +543,13 @@ if __name__ == '__main__':
     print("Server starting on http://localhost:5000")
     print("WebSocket available at ws://localhost:5000")
     print("=" * 60)
+
+    # Load config at startup
+    try:
+        config = load_config()
+        logger = TradingLogger()
+        print("✓ Configuration loaded successfully")
+    except Exception as e:
+        print(f"⚠ Warning: Could not load config at startup: {e}")
 
     socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)

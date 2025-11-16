@@ -90,6 +90,7 @@ function initializeEventListeners() {
     document.getElementById('resumeBtn').addEventListener('click', resumeBot);
     document.getElementById('saveConfigBtn').addEventListener('click', saveConfiguration);
     document.getElementById('refreshWalletBtn').addEventListener('click', loadWalletDetails);
+    document.getElementById('refreshPositionBtn').addEventListener('click', refreshPosition);
     document.getElementById('clearLogBtn').addEventListener('click', clearLog);
     document.getElementById('refreshLogBtn').addEventListener('click', loadDetailedLogs);
 
@@ -185,6 +186,7 @@ async function loadConfiguration() {
             document.getElementById('configLeverage').value = config.trading.leverage || 1;
             document.getElementById('configBuyLevel').value = config.trading.buy_level || 138;
             document.getElementById('configSellLevel').value = config.trading.sell_level || 143;
+            document.getElementById('configTradeDirection').value = config.trading.trade_direction || 'long';
 
             // Update display
             document.getElementById('buyLevel').textContent = '$' + (config.trading.buy_level || 138).toFixed(2);
@@ -193,6 +195,11 @@ async function loadConfiguration() {
 
         if (config.safety) {
             document.getElementById('configMaxLoss').value = config.safety.max_cumulative_loss || -50;
+            document.getElementById('configStopLoss').value = config.safety.stop_loss_percentage || 5;
+            document.getElementById('configSupportLevel').value = config.safety.support_level || 120;
+            document.getElementById('configResistanceLevel').value = config.safety.resistance_level || 160;
+            document.getElementById('configTradingRangeMin').value = config.safety.trading_range_min || 100;
+            document.getElementById('configTradingRangeMax').value = config.safety.trading_range_max || 180;
         }
 
         addLog('Configuration loaded');
@@ -209,10 +216,17 @@ async function saveConfiguration() {
                 position_size: parseFloat(document.getElementById('configPositionSize').value),
                 leverage: parseInt(document.getElementById('configLeverage').value),
                 buy_level: parseFloat(document.getElementById('configBuyLevel').value),
-                sell_level: parseFloat(document.getElementById('configSellLevel').value)
+                sell_level: parseFloat(document.getElementById('configSellLevel').value),
+                order_type: "market",
+                trade_direction: document.getElementById('configTradeDirection').value
             },
             safety: {
-                max_cumulative_loss: parseFloat(document.getElementById('configMaxLoss').value)
+                max_cumulative_loss: parseFloat(document.getElementById('configMaxLoss').value),
+                stop_loss_percentage: parseFloat(document.getElementById('configStopLoss').value),
+                support_level: parseFloat(document.getElementById('configSupportLevel').value),
+                resistance_level: parseFloat(document.getElementById('configResistanceLevel').value),
+                trading_range_min: parseFloat(document.getElementById('configTradingRangeMin').value),
+                trading_range_max: parseFloat(document.getElementById('configTradingRangeMax').value)
             }
         };
 
@@ -243,13 +257,9 @@ async function saveConfiguration() {
 function updateConnectionStatus(connected) {
     const statusEl = document.getElementById('connectionStatus');
     if (connected) {
-        statusEl.classList.add('connected');
-        statusEl.classList.remove('disconnected');
-        statusEl.innerHTML = '<span class="status-dot"></span><span>Connected</span>';
+        statusEl.innerHTML = '<span class="status-dot w-3 h-3 rounded-full bg-green-500"></span><span class="text-sm">Connected</span>';
     } else {
-        statusEl.classList.remove('connected');
-        statusEl.classList.add('disconnected');
-        statusEl.innerHTML = '<span class="status-dot"></span><span>Disconnected</span>';
+        statusEl.innerHTML = '<span class="status-dot w-3 h-3 rounded-full bg-red-500 animate-pulse-dot"></span><span class="text-sm">Disconnected</span>';
     }
 }
 
@@ -259,19 +269,19 @@ function updateBotStatus(status) {
     const state = status.state || 'stopped';
 
     let statusText = state.charAt(0).toUpperCase() + state.slice(1);
-    let statusClass = state;
+    let dotColor = state === 'running' ? 'bg-green-500' : state === 'paused' ? 'bg-yellow-500' : 'bg-red-500';
 
     // Add error message if present
     let errorHTML = '';
     if (state === 'error' && status.error) {
-        errorHTML = `<div class="error-message">${status.error}</div>`;
+        errorHTML = `<div class="mt-2 p-2 bg-red-900/50 border border-red-700 rounded text-sm text-red-200">${status.error}</div>`;
         addLog('Bot Error: ' + status.error, 'error');
     }
 
     statusEl.innerHTML = `
-        <div class="status-indicator ${statusClass}">
-            <span class="status-dot"></span>
-            <span class="status-text">${statusText}</span>
+        <div class="flex items-center gap-3 p-4 bg-gray-700 rounded-lg">
+            <span class="status-dot w-4 h-4 rounded-full ${dotColor}"></span>
+            <span class="status-text text-lg font-medium">${statusText}</span>
         </div>
         ${errorHTML}
     `;
@@ -295,7 +305,7 @@ function updateBotStatus(status) {
     const pnl = status.cumulative_pnl || 0;
     const pnlEl = document.getElementById('totalPnl');
     pnlEl.textContent = '$' + pnl.toFixed(2);
-    pnlEl.className = 'stat-value ' + (pnl >= 0 ? 'success' : 'danger');
+    pnlEl.className = 'text-2xl font-bold ' + (pnl >= 0 ? 'text-green-400' : 'text-red-400');
 
     // Update position
     updatePosition(status.position);
@@ -349,29 +359,30 @@ function updatePosition(position) {
     const positionContent = document.getElementById('positionContent');
 
     if (!position || position.size === 0) {
-        positionContent.innerHTML = '<div class="no-position">No active position</div>';
+        positionContent.innerHTML = '<div class="text-gray-400 text-center py-4">No active position</div>';
         return;
     }
 
-    const pnlClass = position.unrealized_pnl >= 0 ? 'positive' : 'negative';
+    const pnlColor = position.unrealized_pnl >= 0 ? 'text-green-400' : 'text-red-400';
+    const sideColor = position.side === 'buy' ? 'text-green-400' : 'text-red-400';
 
     positionContent.innerHTML = `
-        <div class="position-details">
-            <div class="position-item">
-                <span>Side</span>
-                <strong>${position.side.toUpperCase()}</strong>
+        <div class="grid grid-cols-2 gap-4">
+            <div class="p-3 bg-gray-700 rounded-lg">
+                <div class="text-xs text-gray-400 mb-1">Side</div>
+                <div class="font-semibold ${sideColor}">${position.side.toUpperCase()}</div>
             </div>
-            <div class="position-item">
-                <span>Size</span>
-                <strong>${position.size} SOL</strong>
+            <div class="p-3 bg-gray-700 rounded-lg">
+                <div class="text-xs text-gray-400 mb-1">Size</div>
+                <div class="font-semibold">${position.size} SOL</div>
             </div>
-            <div class="position-item">
-                <span>Entry Price</span>
-                <strong>$${position.entry_price.toFixed(2)}</strong>
+            <div class="p-3 bg-gray-700 rounded-lg">
+                <div class="text-xs text-gray-400 mb-1">Entry Price</div>
+                <div class="font-semibold">$${position.entry_price.toFixed(2)}</div>
             </div>
-            <div class="position-item ${pnlClass}">
-                <span>Unrealized P&L</span>
-                <strong>$${position.unrealized_pnl.toFixed(2)}</strong>
+            <div class="p-3 bg-gray-700 rounded-lg">
+                <div class="text-xs text-gray-400 mb-1">Unrealized P&L</div>
+                <div class="font-semibold ${pnlColor}">$${position.unrealized_pnl.toFixed(2)}</div>
             </div>
         </div>
     `;
@@ -381,27 +392,27 @@ function updateRecentTrades(trades) {
     const tradesListEl = document.getElementById('tradesList');
 
     if (!trades || trades.length === 0) {
-        tradesListEl.innerHTML = '<div class="no-trades">No trades yet</div>';
+        tradesListEl.innerHTML = '<div class="text-gray-400 text-center py-4">No trades yet</div>';
         return;
     }
 
     const tradesHTML = trades.reverse().map(trade => {
         const time = new Date(trade.timestamp).toLocaleTimeString();
-        const type = trade.type.toLowerCase();
+        const isEntry = trade.type.includes('ENTRY');
         const profitHTML = trade.profit !== undefined
-            ? `<span class="trade-profit ${trade.profit >= 0 ? 'positive' : 'negative'}">
+            ? `<span class="font-semibold ${trade.profit >= 0 ? 'text-green-400' : 'text-red-400'}">
                    ${trade.profit >= 0 ? '+' : ''}$${trade.profit.toFixed(2)}
                </span>`
             : '';
 
         return `
-            <div class="trade-item ${type}">
-                <div class="trade-header">
-                    <span class="trade-type ${type}">${trade.type}</span>
-                    <span class="trade-time">${time}</span>
+            <div class="p-3 bg-gray-700 rounded-lg">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium ${isEntry ? 'text-blue-400' : 'text-yellow-400'}">${trade.type}</span>
+                    <span class="text-xs text-gray-400">${time}</span>
                 </div>
-                <div class="trade-details">
-                    <span>${trade.quantity} SOL @ $${trade.price.toFixed(2)}</span>
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-gray-300">${trade.quantity} SOL @ $${trade.price.toFixed(2)}</span>
                     ${profitHTML}
                 </div>
             </div>
@@ -415,7 +426,9 @@ function addLog(message, type = '') {
     const logContainer = document.getElementById('activityLog');
     const timestamp = new Date().toLocaleTimeString();
     const logEntry = document.createElement('div');
-    logEntry.className = 'log-entry ' + type;
+
+    const colorClass = type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : 'text-gray-300';
+    logEntry.className = colorClass;
     logEntry.textContent = `[${timestamp}] ${message}`;
 
     logContainer.insertBefore(logEntry, logContainer.firstChild);
@@ -423,6 +436,27 @@ function addLog(message, type = '') {
     // Keep only last 50 entries
     while (logContainer.children.length > 50) {
         logContainer.removeChild(logContainer.lastChild);
+    }
+}
+
+// Position Refresh Function
+async function refreshPosition() {
+    try {
+        addLog('Refreshing position data...');
+
+        // Request fresh status from backend which will fetch latest position
+        const response = await fetch(`${API_BASE_URL}/api/bot/status`);
+        const data = await response.json();
+
+        if (data && !data.error) {
+            // Update the position display
+            updatePosition(data.position);
+            addLog('Position data refreshed', 'success');
+        } else {
+            addLog('Failed to refresh position: ' + (data.error || 'Unknown error'), 'error');
+        }
+    } catch (error) {
+        addLog('Error refreshing position: ' + error.message, 'error');
     }
 }
 
@@ -438,11 +472,10 @@ async function loadWalletDetails() {
             const walletData = data.wallet;
 
             // Display wallet balances
-            let walletHTML = '<div class="wallet-info">';
+            let walletHTML = '<div class="space-y-2">';
 
             // Check if wallet data is an array (new format)
             if (Array.isArray(walletData) && walletData.length > 0) {
-                walletHTML += '<div class="balance-list">';
                 walletData.forEach(item => {
                     const currency = item.currency_short_name || item.currency || item.asset;
                     const balance = parseFloat(item.balance || 0);
@@ -451,31 +484,30 @@ async function loadWalletDetails() {
 
                     if (balance > 0 || locked > 0 || crossMargin > 0) {
                         walletHTML += `
-                            <div class="balance-item">
-                                <span class="currency">${currency}</span>
-                                <div class="amounts">
-                                    <span class="available">Balance: ${balance}</span>
-                                    ${locked > 0 ? `<span class="locked">Locked: ${locked}</span>` : ''}
-                                    ${crossMargin > 0 ? `<span class="margin">Margin: ${crossMargin}</span>` : ''}
+                            <div class="p-3 bg-gray-700 rounded-lg">
+                                <div class="font-semibold text-blue-400 mb-1">${currency}</div>
+                                <div class="text-sm space-y-1">
+                                    <div class="text-gray-300">Balance: <span class="font-medium">${balance}</span></div>
+                                    ${locked > 0 ? `<div class="text-yellow-400">Locked: ${locked}</div>` : ''}
+                                    ${crossMargin > 0 ? `<div class="text-purple-400">Margin: ${crossMargin}</div>` : ''}
                                 </div>
                             </div>
                         `;
                     }
                 });
-                walletHTML += '</div>';
             } else {
-                walletHTML += '<div class="no-balance">No balance information available</div>';
+                walletHTML += '<div class="text-gray-400 text-center py-4">No balance information available</div>';
             }
 
             walletHTML += '</div>';
             walletContent.innerHTML = walletHTML;
             addLog('Wallet details loaded', 'success');
         } else {
-            walletContent.innerHTML = '<div class="wallet-error">Failed to load wallet details</div>';
+            walletContent.innerHTML = '<div class="text-red-400 text-center py-4">Failed to load wallet details</div>';
             addLog('Failed to load wallet: ' + (data.error || 'Unknown error'), 'error');
         }
     } catch (error) {
-        document.getElementById('walletContent').innerHTML = '<div class="wallet-error">Error loading wallet</div>';
+        document.getElementById('walletContent').innerHTML = '<div class="text-red-400 text-center py-4">Error loading wallet</div>';
         addLog('Error loading wallet: ' + error.message, 'error');
     }
 }
@@ -579,12 +611,12 @@ function addLog(message, type = '') {
     updateLogStats();
 }
 
-// Periodic updates
+// Periodic updates - Update price every second
 setInterval(() => {
     if (socket && socket.connected) {
         socket.emit('request_status');
     }
-}, 5000);
+}, 1000);
 
 // Periodic wallet refresh (every 30 seconds)
 setInterval(() => {

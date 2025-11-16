@@ -2,12 +2,19 @@
   "trading": {
     "market": "SOLUSDT",
     "position_size": 10,
-    "leverage": 1,
-    "buy_level": 138,
-    "sell_level": 144
+    "leverage": 10,
+    "buy_level": 139.5,
+    "sell_level": 143,
+    "order_type": "market",
+    "trade_direction": "short"
   },
   "safety": {
-    "max_cumulative_loss": -50
+    "max_cumulative_loss": 1,
+    "stop_loss_percentage": 5,
+    "support_level": 120,
+    "resistance_level": 160,
+    "trading_range_min": 100,
+    "trading_range_max": 180
   },
   "monitoring": {
     "check_interval_seconds": 60,

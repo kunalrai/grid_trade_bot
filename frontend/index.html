@@ -4,176 +4,279 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SOL/USDT Grid Trading Bot - CoinDCX</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="styles.css">
+    <style>
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .animate-pulse-dot {
+            animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
 </head>
-<body>
-    <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-content">
-                <h1>🤖 SOL/USDT Grid Trading Bot</h1>
-                <p class="subtitle">CoinDCX Futures Trading</p>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-bold text-blue-400">SOL/USDT Grid Trading Bot</h1>
+                    <p class="text-sm text-gray-400">CoinDCX Futures Trading</p>
+                </div>
+                <div id="connectionStatus" class="flex items-center gap-2 px-4 py-2 bg-gray-700 rounded-lg">
+                    <span class="status-dot w-3 h-3 rounded-full bg-yellow-500 animate-pulse-dot"></span>
+                    <span class="text-sm">Connecting...</span>
+                </div>
             </div>
-            <div class="connection-status" id="connectionStatus">
-                <span class="status-dot"></span>
-                <span>Connecting...</span>
-            </div>
-        </header>
+        </div>
+    </header>
 
-        <!-- Main Content -->
-        <div class="main-content">
-            <!-- Left Column -->
-            <div class="left-column">
-                <!-- Bot Control Panel -->
-                <div class="card control-panel">
-                    <h2>🎮 Bot Control</h2>
-                    <div class="bot-status" id="botStatus">
-                        <div class="status-indicator stopped">
-                            <span class="status-dot"></span>
-                            <span class="status-text">Stopped</span>
-                        </div>
-                    </div>
-                    <div class="control-buttons">
-                        <button id="startBtn" class="btn btn-success">▶ Start Bot</button>
-                        <button id="stopBtn" class="btn btn-danger" disabled>⏹ Stop Bot</button>
-                        <button id="pauseBtn" class="btn btn-warning" disabled>⏸ Pause</button>
-                        <button id="resumeBtn" class="btn btn-info" disabled>▶ Resume</button>
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-6">
+        <!-- Top Row: Bot Control & Price Monitor -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+            <!-- Bot Control Panel -->
+            <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <span>🎮</span> Bot Control
+                </h2>
+                <div id="botStatus" class="mb-4">
+                    <div class="status-indicator flex items-center gap-3 p-4 bg-gray-700 rounded-lg">
+                        <span class="status-dot w-4 h-4 rounded-full bg-red-500"></span>
+                        <span class="status-text text-lg font-medium">Stopped</span>
                     </div>
                 </div>
-
-                <!-- Price Monitor -->
-                <div class="card price-monitor">
-                    <h2>💰 Price Monitor</h2>
-                    <div class="price-display">
-                        <div class="current-price">
-                            <span class="label">Current Price</span>
-                            <span class="value" id="currentPrice">$0.00</span>
-                        </div>
-                        <div class="price-levels">
-                            <div class="level sell-level">
-                                <span class="label">Sell Level</span>
-                                <span class="value" id="sellLevel">$143.00</span>
-                            </div>
-                            <div class="level buy-level">
-                                <span class="label">Buy Level</span>
-                                <span class="value" id="buyLevel">$138.00</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="price-chart">
-                        <canvas id="priceChart"></canvas>
-                    </div>
-                </div>
-
-                <!-- Trading Statistics -->
-                <div class="card trading-stats">
-                    <h2>📊 Trading Statistics</h2>
-                    <div class="stats-grid">
-                        <div class="stat-item">
-                            <span class="stat-label">Total Trades</span>
-                            <span class="stat-value" id="totalTrades">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Winning Trades</span>
-                            <span class="stat-value success" id="winningTrades">0</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Win Rate</span>
-                            <span class="stat-value" id="winRate">0%</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Cycles Completed</span>
-                            <span class="stat-value" id="cycles">0</span>
-                        </div>
-                        <div class="stat-item pnl">
-                            <span class="stat-label">Total P&L</span>
-                            <span class="stat-value" id="totalPnl">$0.00</span>
-                        </div>
-                    </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="startBtn" class="px-4 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors">
+                        ▶ Start Bot
+                    </button>
+                    <button id="stopBtn" class="px-4 py-3 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        ⏹ Stop Bot
+                    </button>
+                    <button id="pauseBtn" class="px-4 py-3 bg-yellow-600 hover:bg-yellow-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        ⏸ Pause
+                    </button>
+                    <button id="resumeBtn" class="px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        ▶ Resume
+                    </button>
                 </div>
             </div>
 
-            <!-- Right Column -->
-            <div class="right-column">
-                <!-- Wallet Details -->
-                <div class="card wallet-details">
-                    <h2>💼 Futures Wallet</h2>
-                    <div id="walletContent">
-                        <div class="wallet-loading">Loading wallet details...</div>
+            <!-- Price Monitor -->
+            <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <span>💰</span> Price Monitor
+                </h2>
+                <div class="space-y-4">
+                    <div class="text-center p-4 bg-gray-700 rounded-lg">
+                        <div class="text-sm text-gray-400 mb-1">Current Price</div>
+                        <div id="currentPrice" class="text-3xl font-bold text-blue-400">$0.00</div>
                     </div>
-                    <button id="refreshWalletBtn" class="btn btn-secondary btn-sm">🔄 Refresh</button>
-                </div>
-
-                <!-- Current Position -->
-                <div class="card position-info">
-                    <h2>📍 Current Position</h2>
-                    <div id="positionContent">
-                        <div class="no-position">No active position</div>
-                    </div>
-                </div>
-
-                <!-- Configuration -->
-                <div class="card config-panel">
-                    <h2>⚙️ Configuration</h2>
-                    <div class="config-grid">
-                        <div class="config-item">
-                            <label>Market</label>
-                            <input type="text" id="configMarket" value="SOLUSDT" readonly>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="p-3 bg-red-900/30 border border-red-700 rounded-lg">
+                            <div class="text-xs text-gray-400 mb-1">Sell Level</div>
+                            <div id="sellLevel" class="text-xl font-semibold text-red-400">$143.00</div>
                         </div>
-                        <div class="config-item">
-                            <label>Position Size (SOL)</label>
-                            <input type="number" id="configPositionSize" value="10" step="0.1">
+                        <div class="p-3 bg-green-900/30 border border-green-700 rounded-lg">
+                            <div class="text-xs text-gray-400 mb-1">Buy Level</div>
+                            <div id="buyLevel" class="text-xl font-semibold text-green-400">$139.00</div>
                         </div>
-                        <div class="config-item">
-                            <label>Leverage</label>
-                            <input type="number" id="configLeverage" value="1" min="1" max="10">
-                        </div>
-                        <div class="config-item">
-                            <label>Buy Level ($)</label>
-                            <input type="number" id="configBuyLevel" value="138.00" step="0.01">
-                        </div>
-                        <div class="config-item">
-                            <label>Sell Level ($)</label>
-                            <input type="number" id="configSellLevel" value="143.00" step="0.01">
-                        </div>
-                        <div class="config-item">
-                            <label>Max Loss ($)</label>
-                            <input type="number" id="configMaxLoss" value="-50.00" step="1">
-                        </div>
-                    </div>
-                    <button id="saveConfigBtn" class="btn btn-primary">💾 Save Configuration</button>
-                </div>
-
-                <!-- Recent Trades -->
-                <div class="card recent-trades">
-                    <h2>📈 Recent Trades</h2>
-                    <div class="trades-list" id="tradesList">
-                        <div class="no-trades">No trades yet</div>
-                    </div>
-                </div>
-
-                <!-- Detailed Activity Log -->
-                <div class="card activity-log">
-                    <div class="log-header">
-                        <h2>📋 Detailed Activity Log</h2>
-                        <div class="log-controls">
-                            <button id="clearLogBtn" class="btn btn-secondary btn-sm">🗑️ Clear</button>
-                            <button id="refreshLogBtn" class="btn btn-secondary btn-sm">🔄 Refresh</button>
-                        </div>
-                    </div>
-                    <div class="log-stats">
-                        <span class="log-stat" id="logCount">0 entries</span>
-                        <span class="log-stat error-count" id="errorCount">0 errors</span>
-                    </div>
-                    <div class="log-container" id="activityLog">
-                        <div class="log-entry">System ready</div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+
+        <!-- Second Row: Trading Stats & Wallet -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+            <!-- Trading Statistics -->
+            <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <span>📊</span> Trading Statistics
+                </h2>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <div class="text-center p-3 bg-gray-700 rounded-lg">
+                        <div class="text-xs text-gray-400 mb-1">Total Trades</div>
+                        <div id="totalTrades" class="text-2xl font-bold">0</div>
+                    </div>
+                    <div class="text-center p-3 bg-gray-700 rounded-lg">
+                        <div class="text-xs text-gray-400 mb-1">Winning Trades</div>
+                        <div id="winningTrades" class="text-2xl font-bold text-green-400">0</div>
+                    </div>
+                    <div class="text-center p-3 bg-gray-700 rounded-lg">
+                        <div class="text-xs text-gray-400 mb-1">Win Rate</div>
+                        <div id="winRate" class="text-2xl font-bold">0%</div>
+                    </div>
+                    <div class="text-center p-3 bg-gray-700 rounded-lg">
+                        <div class="text-xs text-gray-400 mb-1">Cycles</div>
+                        <div id="cycles" class="text-2xl font-bold">0</div>
+                    </div>
+                    <div class="text-center p-3 bg-gray-700 rounded-lg col-span-2">
+                        <div class="text-xs text-gray-400 mb-1">Total P&L</div>
+                        <div id="totalPnl" class="text-2xl font-bold">$0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Wallet Details -->
+            <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold flex items-center gap-2">
+                        <span>💼</span> Futures Wallet
+                    </h2>
+                    <button id="refreshWalletBtn" class="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded transition-colors">
+                        🔄 Refresh
+                    </button>
+                </div>
+                <div id="walletContent" class="text-sm">
+                    <div class="text-gray-400 text-center py-4">Loading wallet details...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Third Row: Current Position & Price Chart -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+            <!-- Current Position -->
+            <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold flex items-center gap-2">
+                        <span>📍</span> Current Position
+                    </h2>
+                    <button id="refreshPositionBtn" class="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded transition-colors">
+                        🔄 Refresh
+                    </button>
+                </div>
+                <div id="positionContent">
+                    <div class="text-gray-400 text-center py-4">No active position</div>
+                </div>
+            </div>
+
+            <!-- Price Chart -->
+            <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <span>📈</span> Price Chart
+                </h2>
+                <div class="h-64">
+                    <canvas id="priceChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fourth Row: Configuration -->
+        <div class="bg-gray-800 rounded-lg shadow-lg p-6 mb-4">
+            <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                <span>⚙️</span> Configuration
+            </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Market</label>
+                    <input type="text" id="configMarket" value="SOLUSDT" readonly
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300 cursor-not-allowed">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Position Size (SOL)</label>
+                    <input type="number" id="configPositionSize" value="10" step="0.1"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Leverage</label>
+                    <input type="number" id="configLeverage" value="1" min="1" max="10"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Trade Direction</label>
+                    <select id="configTradeDirection"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="long">Long Only</option>
+                        <option value="short">Short Only</option>
+                        <option value="both">Both</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Buy Level ($)</label>
+                    <input type="number" id="configBuyLevel" value="139.00" step="0.01"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Sell Level ($)</label>
+                    <input type="number" id="configSellLevel" value="143.00" step="0.01"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Stop-Loss (%)</label>
+                    <input type="number" id="configStopLoss" value="5" min="1" max="50" step="0.5"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Max Loss ($)</label>
+                    <input type="number" id="configMaxLoss" value="1" step="1"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Support Level ($)</label>
+                    <input type="number" id="configSupportLevel" value="120.00" step="0.01"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Resistance Level ($)</label>
+                    <input type="number" id="configResistanceLevel" value="160.00" step="0.01"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Trading Range Min ($)</label>
+                    <input type="number" id="configTradingRangeMin" value="100.00" step="0.01"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Trading Range Max ($)</label>
+                    <input type="number" id="configTradingRangeMax" value="180.00" step="0.01"
+                        class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+            </div>
+            <button id="saveConfigBtn" class="w-full sm:w-auto px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors">
+                💾 Save Configuration
+            </button>
+        </div>
+
+        <!-- Fifth Row: Recent Trades & Activity Log -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Recent Trades -->
+            <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <span>📈</span> Recent Trades
+                </h2>
+                <div id="tradesList" class="space-y-2 max-h-96 overflow-y-auto">
+                    <div class="text-gray-400 text-center py-4">No trades yet</div>
+                </div>
+            </div>
+
+            <!-- Activity Log -->
+            <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold flex items-center gap-2">
+                        <span>📋</span> Activity Log
+                    </h2>
+                    <div class="flex gap-2">
+                        <button id="clearLogBtn" class="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded transition-colors">
+                            🗑️ Clear
+                        </button>
+                        <button id="refreshLogBtn" class="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded transition-colors">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                </div>
+                <div class="flex gap-4 mb-3 text-sm">
+                    <span id="logCount" class="text-gray-400">0 entries</span>
+                    <span id="errorCount" class="text-red-400">0 errors</span>
+                </div>
+                <div id="activityLog" class="space-y-1 max-h-96 overflow-y-auto bg-gray-900 rounded p-3 font-mono text-xs">
+                    <div class="text-green-400">System ready</div>
+                </div>
+            </div>
+        </div>
+    </main>
 
     <script src="app.js"></script>
 </body>

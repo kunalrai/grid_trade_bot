@@ -289,42 +289,77 @@ class CoinDCXFuturesClient:
                            quantity: float, price: Optional[float] = None,
                            leverage: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """
-        Create a futures order
+        Create a futures order using CoinDCX futures API format
 
         Args:
-            market: Market symbol (e.g., 'SOLUSDT')
+            market: Market symbol (e.g., 'SOLUSDT' will be converted to 'B-SOL_USDT')
             side: 'buy' or 'sell'
             order_type: 'market_order' or 'limit_order'
             quantity: Order quantity
             price: Limit price (required for limit orders)
-            leverage: Leverage (if supported)
+            leverage: Leverage (default 10x)
 
         Returns:
             Order information or None
         """
-        payload = {
+        # Convert market format: SOLUSDT -> B-SOL_USDT
+        if not market.startswith('B-'):
+            # Extract base and quote: SOLUSDT -> SOL, USDT
+            # Assuming format is always BASEUSDT or BASEBUSD
+            if 'USDT' in market:
+                base = market.replace('USDT', '')
+                quote = 'USDT'
+            elif 'BUSD' in market:
+                base = market.replace('BUSD', '')
+                quote = 'BUSD'
+            else:
+                base = market[:-4]  # fallback
+                quote = market[-4:]
+
+            market = f"B-{base}_{quote}"
+
+        # Build order object in CoinDCX format
+        order_obj = {
             "side": side,
+            "pair": market,
             "order_type": order_type,
-            "market": market,
             "total_quantity": quantity,
-            "timestamp": int(time.time() * 1000),
-            "client_order_id": f"grid_{int(time.time() * 1000)}"
+            "notification": "no_notification",
+            "time_in_force": "good_till_cancel",
+            "hidden": False,
+            "post_only": False
         }
 
+        # Add price for limit orders
         if order_type == "limit_order" and price:
-            payload["price_per_unit"] = price
+            order_obj["price"] = str(price)
+        elif order_type == "market_order":
+            # Market orders may need a reference price
+            order_obj["price"] = str(price) if price else "0"
 
+        # Add leverage if specified
         if leverage:
-            payload["leverage"] = leverage
+            order_obj["leverage"] = leverage
 
-        result = self._make_request("POST", "/exchange/v1/orders/create", payload)
+        # Wrap in payload with timestamp
+        payload = {
+            "timestamp": int(time.time() * 1000),
+            "order": order_obj
+        }
 
-        if result and self.logger:
-            self.logger.info(f"Futures {side} order created: {quantity} {market} @ {price if price else 'market'}")
+        result = self._make_request("POST", "/exchange/v1/derivatives/futures/orders/create", payload)
 
-        return result
+        # Extract first element from array response
+        if result and isinstance(result, list) and len(result) > 0:
+            order_info = result[0]
+            if self.logger:
+                self.logger.info(f"Futures {side} order created: {quantity} {market} @ {price if price else 'market'} (ID: {order_info.get('id', 'unknown')})")
+            return order_info
 
-    def place_market_order(self, market: str, side: str, quantity: float) -> Optional[Dict[str, Any]]:
+        return None
+
+    def place_market_order(self, market: str, side: str, quantity: float,
+                          price: Optional[float] = None, leverage: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """
         Place a market order
 
@@ -332,13 +367,16 @@ class CoinDCXFuturesClient:
             market: Market symbol
             side: 'buy' or 'sell'
             quantity: Order quantity
+            price: Reference price for market order (optional)
+            leverage: Leverage to use (optional)
 
         Returns:
             Order information
         """
-        return self.create_futures_order(market, side, "market_order", quantity)
+        return self.create_futures_order(market, side, "market_order", quantity, price, leverage)
 
-    def place_limit_order(self, market: str, side: str, quantity: float, price: float) -> Optional[Dict[str, Any]]:
+    def place_limit_order(self, market: str, side: str, quantity: float, price: float,
+                         leverage: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """
         Place a limit order
 
@@ -347,11 +385,12 @@ class CoinDCXFuturesClient:
             side: 'buy' or 'sell'
             quantity: Order quantity
             price: Limit price
+            leverage: Leverage to use (optional)
 
         Returns:
             Order information
         """
-        return self.create_futures_order(market, side, "limit_order", quantity, price)
+        return self.create_futures_order(market, side, "limit_order", quantity, price, leverage)
 
     def get_active_orders(self, market: str) -> Optional[List[Dict[str, Any]]]:
         """
@@ -449,6 +488,7 @@ class CoinDCXFuturesClient:
                     active_pos = float(pos.get('active_pos', 0))
 
                     return {
+                        'id': pos.get('id'),  # Position ID for exit API
                         'market': pair,
                         'size': abs(active_pos),
                         'side': 'long' if active_pos > 0 else 'short',
@@ -460,24 +500,24 @@ class CoinDCXFuturesClient:
                     }
         return None
 
-    def exit_position(self, pair: str) -> bool:
+    def exit_position(self, position_id: str) -> bool:
         """
         Exit position using CoinDCX exit position API
 
         Args:
-            pair: Trading pair (e.g., 'SOLUSDT')
+            position_id: Position ID to exit
 
         Returns:
             True if successful
         """
         payload = {
-            "pair": pair,
+            "id": position_id,
             "timestamp": int(time.time() * 1000)
         }
-        result = self._make_request("POST", "/exchange/v1/positions/exit", payload)
+        result = self._make_request("POST", "/exchange/v1/derivatives/futures/positions/exit", payload)
 
         if result and self.logger:
-            self.logger.info(f"Position exited for {pair}")
+            self.logger.info(f"Position exited (ID: {position_id})")
 
         return result is not None
 
@@ -491,15 +531,16 @@ class CoinDCXFuturesClient:
         Returns:
             True if successful
         """
+        # Get position to extract ID
+        position = self.get_position(market)
+        if not position:
+            return True  # No position to close
+
         # Try using the exit position API first
-        if self.exit_position(market):
+        if position.get('id') and self.exit_position(position['id']):
             return True
 
         # Fallback: Place opposite order to close position
-        position = self.get_position(market)
-        if not position:
-            return True
-
         side = 'sell' if position['side'] == 'long' else 'buy'
         quantity = abs(position['size'])
 
