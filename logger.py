@@ -53,6 +53,10 @@ class TradingLogger:
         self.logger.addHandler(console_handler)
         self.logger.addHandler(file_handler)
 
+    def debug(self, message: str):
+        """Log debug message"""
+        self.logger.debug(message)
+
     def info(self, message: str):
         """Log info message"""
         self.logger.info(message)

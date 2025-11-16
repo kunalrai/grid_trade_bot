@@ -88,11 +88,24 @@ class CoinDCXFuturesClient:
                 response = self.session.post(url, json=payload, headers=headers, timeout=10)
 
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+
+            # Log successful response for debugging (only if debug method exists)
+            if self.logger and hasattr(self.logger, 'debug'):
+                self.logger.debug(f"API {method} {endpoint} - Success")
+
+            return result
 
         except requests.exceptions.RequestException as e:
             if self.logger:
-                self.logger.error(f"API request failed: {str(e)}")
+                self.logger.error(f"API request failed: {method} {endpoint}")
+                self.logger.error(f"Error: {str(e)}")
+                if hasattr(e, 'response') and e.response is not None:
+                    try:
+                        error_data = e.response.json()
+                        self.logger.error(f"Response: {error_data}")
+                    except:
+                        self.logger.error(f"Response text: {e.response.text[:200]}")
             return None
 
     def test_connection(self) -> bool:
@@ -141,6 +154,8 @@ class CoinDCXFuturesClient:
 
         Returns:
             Account details (first user object from array response)
+            Example response: {'coindcx_id': 'xxx', 'first_name': 'xxx', 'last_name': 'xxx',
+                              'mobile_number': 'xxx', 'email': 'xxx@example.com'}
         """
         payload = {
             "timestamp": int(time.time() * 1000)
@@ -148,9 +163,21 @@ class CoinDCXFuturesClient:
         result = self._make_request("POST", "/exchange/v1/users/info", payload)
 
         # API returns an array, extract the first element
-        if result and isinstance(result, list) and len(result) > 0:
-            return result[0]
-        return result
+        if result:
+            if isinstance(result, list) and len(result) > 0:
+                user_info = result[0]
+                if self.logger:
+                    self.logger.info(f"✓ Account authenticated: {user_info.get('email', 'unknown')}")
+                return user_info
+            elif isinstance(result, dict):
+                # In case API format changes to return single object
+                if self.logger:
+                    self.logger.info(f"✓ Account authenticated: {result.get('email', 'unknown')}")
+                return result
+
+        if self.logger:
+            self.logger.error("✗ Failed to get account info - API returned empty or invalid response")
+        return None
 
     def get_balance(self) -> Optional[Dict[str, float]]:
         """
@@ -377,16 +404,19 @@ class CoinDCXFuturesClient:
             List of positions
         """
         payload = {
-            "timestamp": int(time.time() * 1000)
+            "timestamp": int(time.time() * 1000),
+            "page": "1",
+            "size": "100",
+            "margin_currency_short_name": ["USDT"]
         }
-        return self._make_request("POST", "/exchange/v1/positions/list", payload)
+        return self._make_request("POST", "/exchange/v1/derivatives/futures/positions", payload)
 
     def get_position(self, market: str) -> Optional[Dict[str, Any]]:
         """
         Get position for specific market
 
         Args:
-            market: Market symbol
+            market: Market symbol (e.g., 'SOLUSDT' will match 'B-SOL_USDT')
 
         Returns:
             Position information or None
@@ -394,14 +424,23 @@ class CoinDCXFuturesClient:
         positions = self.get_positions()
         if positions:
             for pos in positions:
-                if pos.get('market') == market and float(pos.get('quantity', 0)) != 0:
+                # Match market: 'SOLUSDT' should match 'B-SOL_USDT'
+                pair = pos.get('pair', '')
+                # Convert B-SOL_USDT to SOLUSDT format for comparison
+                normalized_pair = pair.replace('B-', '').replace('_', '')
+
+                if normalized_pair == market and float(pos.get('active_pos', 0)) != 0:
+                    active_pos = float(pos.get('active_pos', 0))
+
                     return {
-                        'market': pos['market'],
-                        'size': float(pos['quantity']),
-                        'side': pos['side'],
-                        'entry_price': float(pos.get('entry_price', 0)),
-                        'unrealized_pnl': float(pos.get('unrealized_pnl', 0)),
-                        'leverage': int(pos.get('leverage', 1))
+                        'market': pair,
+                        'size': abs(active_pos),
+                        'side': 'long' if active_pos > 0 else 'short',
+                        'entry_price': float(pos.get('avg_price', 0)),
+                        'unrealized_pnl': 0,  # Not directly available in this response
+                        'leverage': int(pos.get('leverage', 1)),
+                        'liquidation_price': float(pos.get('liquidation_price', 0)),
+                        'margin_type': pos.get('margin_type', 'crossed')
                     }
         return None
 
