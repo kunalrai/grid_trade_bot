@@ -409,9 +409,40 @@ def background_status_broadcast():
         emit_status_update()
 
 
-# Start background task
+def keep_alive_ping():
+    """Ping the server every 10 minutes to prevent it from sleeping on free-tier cloud platforms"""
+    import time
+    import requests
+
+    # Wait for server to fully start
+    time.sleep(60)
+
+    while True:
+        try:
+            # Sleep for 10 minutes (600 seconds)
+            # This keeps the server active on platforms like Render that sleep after 15 minutes of inactivity
+            time.sleep(600)
+
+            # Ping the health endpoint
+            port = int(os.getenv('PORT', 5000))
+            url = f"http://localhost:{port}/api/health"
+
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                print(f"Keep-alive ping successful at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            else:
+                print(f"Keep-alive ping returned status {response.status_code}")
+        except Exception as e:
+            print(f"Keep-alive ping failed: {str(e)}")
+
+
+# Start background tasks
 status_thread = threading.Thread(target=background_status_broadcast, daemon=True)
 status_thread.start()
+
+# Start keep-alive thread (prevents sleeping on free-tier platforms)
+keepalive_thread = threading.Thread(target=keep_alive_ping, daemon=True)
+keepalive_thread.start()
 
 
 if __name__ == '__main__':

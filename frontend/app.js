@@ -421,9 +421,23 @@ function addLog(message, type = '') {
     }
 }
 
-// Periodic updates
+// Periodic status updates
 setInterval(() => {
     if (socket && socket.connected) {
         socket.emit('request_status');
     }
 }, 5000);
+
+// Keep-alive ping to prevent server from sleeping (runs every 10 minutes)
+// This is a backup to the server-side keep-alive
+setInterval(() => {
+    fetch(`${API_BASE_URL}/api/health`)
+        .then(response => {
+            if (response.ok) {
+                console.log('Keep-alive ping sent at', new Date().toLocaleTimeString());
+            }
+        })
+        .catch(error => {
+            console.error('Keep-alive ping failed:', error);
+        });
+}, 600000); // 10 minutes in milliseconds

@@ -100,6 +100,57 @@ port = int(os.getenv('PORT', 5000))
    heroku config:set FLASK_SECRET_KEY=random_secret_key
    ```
 
+## Preventing Server Sleep on Free Tiers
+
+### Built-in Keep-Alive System
+
+The application now includes a **dual keep-alive system** to prevent sleeping on free-tier platforms like Render:
+
+1. **Server-Side Keep-Alive** ([api_server.py:412-436](backend/api_server.py#L412-L436))
+   - The server pings itself every 10 minutes
+   - Runs automatically in the background
+   - Works even when no one is using the app
+   - Logs: "Keep-alive ping successful at [timestamp]"
+
+2. **Browser-Side Keep-Alive** ([app.js:431-443](frontend/app.js#L431-L443))
+   - Sends a ping every 10 minutes when page is open
+   - Backup to the server-side mechanism
+   - Visible in browser console
+
+### Alternative: External Monitoring (Recommended for Production)
+
+For more reliability, use a free external monitoring service:
+
+#### UptimeRobot (Free - Recommended)
+1. Go to https://uptimerobot.com/
+2. Create a free account
+3. Add a new monitor:
+   - Monitor Type: HTTP(s)
+   - URL: `https://your-app.onrender.com/api/health`
+   - Monitoring Interval: 5 minutes
+4. Your app will receive a ping every 5 minutes, keeping it awake 24/7
+
+#### Other Options
+- **Cron-Job.org** - Free, pings every 5-60 minutes
+- **Render Cron Jobs** - Available on paid plans
+- **GitHub Actions** - Can be configured to ping your app
+
+### How It Works
+
+Free-tier platforms like Render sleep after **15 minutes of inactivity**. The keep-alive system:
+- Pings every **10 minutes** (before the 15-minute timeout)
+- Creates "activity" that prevents sleeping
+- Ensures your trading bot runs continuously
+
+### Monitoring Keep-Alive
+
+Check your Render logs to confirm it's working:
+```
+Keep-alive ping successful at 2025-01-17 14:30:00
+Keep-alive ping successful at 2025-01-17 14:40:00
+Keep-alive ping successful at 2025-01-17 14:50:00
+```
+
 ## Common Issues and Solutions
 
 ### Issue: "Failed to fetch" when saving config
