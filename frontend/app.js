@@ -1,6 +1,7 @@
 // Configuration
-const API_BASE_URL = 'http://localhost:5000';
-const SOCKET_URL = 'http://localhost:5000';
+// Automatically detect API URL based on environment
+const API_BASE_URL = window.location.origin;
+const SOCKET_URL = window.location.origin;
 
 // State
 let socket = null;
