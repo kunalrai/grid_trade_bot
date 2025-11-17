@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: grid-trading-bot
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python backend/api_server.py"
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: COINDCX_API_KEY
+        sync: false
+      - key: COINDCX_API_SECRET
+        sync: false
+      - key: FLASK_SECRET_KEY
+        generateValue: true

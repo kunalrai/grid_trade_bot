@@ -1,6 +1,15 @@
-// Configuration
-const API_BASE_URL = 'http://localhost:5000';
-const SOCKET_URL = 'http://localhost:5000';
+// Configuration - Automatically detect the correct URL based on environment
+const getBaseURL = () => {
+    // If running on same origin (served by Flask), use relative path
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        return window.location.origin;
+    }
+    // For local development, use localhost
+    return 'http://localhost:5000';
+};
+
+const API_BASE_URL = getBaseURL();
+const SOCKET_URL = API_BASE_URL;
 
 // State
 let socket = null;

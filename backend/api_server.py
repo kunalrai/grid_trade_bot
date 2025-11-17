@@ -23,7 +23,7 @@ from grid_trader_coindcx import GridTraderCoinDCX
 load_dotenv()
 
 # Initialize Flask app
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../frontend', static_url_path='')
 app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'your-secret-key-here')
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -69,6 +69,12 @@ def run_bot_loop():
 
 # ============== API ENDPOINTS ==============
 
+@app.route('/')
+def serve_frontend():
+    """Serve the main frontend page"""
+    return app.send_static_file('index.html')
+
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -90,12 +96,29 @@ def update_config():
     global config
     try:
         new_config = request.json
-        config.update(new_config)
 
-        # Save to file
-        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
-        with open(config_path, 'w') as f:
-            json.dump(config, f, indent=2)
+        # Deep merge the configuration
+        if 'trading' in new_config:
+            if 'trading' not in config:
+                config['trading'] = {}
+            config['trading'].update(new_config['trading'])
+
+        if 'safety' in new_config:
+            if 'safety' not in config:
+                config['safety'] = {}
+            config['safety'].update(new_config['safety'])
+
+        # Try to save to file, but don't fail if we can't (cloud environments may be read-only)
+        try:
+            config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
+            with open(config_path, 'w') as f:
+                json.dump(config, f, indent=2)
+            logger.info("Configuration saved to file successfully") if logger else None
+        except (IOError, OSError, PermissionError) as file_error:
+            # Log warning but continue - config is still updated in memory
+            if logger:
+                logger.warning(f"Could not save config to file (using in-memory only): {str(file_error)}")
+            print(f"Warning: Could not save config to file: {str(file_error)}")
 
         return jsonify({'success': True, 'config': config})
     except Exception as e:
@@ -392,11 +415,35 @@ status_thread.start()
 
 
 if __name__ == '__main__':
+    # Load initial configuration
+    try:
+        config = load_config()
+        print("Configuration loaded successfully")
+    except Exception as e:
+        print(f"Warning: Could not load config.json: {e}")
+        # Use default configuration
+        config = {
+            "trading": {
+                "market": "SOLUSDT",
+                "position_size": 10,
+                "leverage": 1,
+                "buy_level": 138.0,
+                "sell_level": 143.0
+            },
+            "safety": {
+                "max_cumulative_loss": -50.0
+            }
+        }
+        print("Using default configuration")
+
+    # Get port from environment variable (for cloud deployments)
+    port = int(os.getenv('PORT', 5000))
+
     print("=" * 60)
     print("Grid Trading Bot - API Server")
     print("=" * 60)
-    print("Server starting on http://localhost:5000")
-    print("WebSocket available at ws://localhost:5000")
+    print(f"Server starting on port {port}")
+    print(f"Access the web UI at http://localhost:{port}")
     print("=" * 60)
 
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
