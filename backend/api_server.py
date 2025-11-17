@@ -118,8 +118,27 @@ def index():
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
-    return jsonify({'status': 'ok', 'timestamp': datetime.now().isoformat()})
+    """Health check endpoint for monitoring and keep-alive"""
+    global trader
+
+    response = {
+        'status': 'ok',
+        'timestamp': datetime.now().isoformat(),
+        'uptime': datetime.now().isoformat(),
+        'bot_running': trader.is_running if trader else False,
+        'bot_state': trader.bot_state if trader else 'stopped'
+    }
+
+    return jsonify(response)
+
+
+@app.route('/api/ping', methods=['GET', 'POST'])
+def ping():
+    """Lightweight ping endpoint for keep-alive"""
+    return jsonify({
+        'pong': True,
+        'timestamp': datetime.now().isoformat()
+    })
 
 
 @app.route('/api/test/connection', methods=['GET'])

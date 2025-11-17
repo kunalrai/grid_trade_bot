@@ -805,3 +805,27 @@ setInterval(() => {
         loadWalletDetails();
     }
 }, 30000);
+
+// Keep-alive ping to prevent Render timeout (every 10 minutes)
+// Render free tier times out after 15 minutes of inactivity
+let lastPingTime = null;
+
+function performKeepAlivePing() {
+    fetch(`${API_BASE_URL}/api/ping`)
+        .then(response => response.json())
+        .then(data => {
+            lastPingTime = new Date();
+            console.log('Keep-alive ping successful:', data.timestamp);
+            addLog('Keep-alive ping successful', 'success');
+        })
+        .catch(error => {
+            console.warn('Keep-alive ping failed:', error);
+            addLog('Keep-alive ping failed: ' + error.message, 'error');
+        });
+}
+
+// Perform ping every 10 minutes
+setInterval(performKeepAlivePing, 10 * 60 * 1000);
+
+// Initial ping on load
+performKeepAlivePing();
