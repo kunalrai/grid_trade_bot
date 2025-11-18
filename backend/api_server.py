@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import threading
+import requests
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
@@ -148,10 +149,24 @@ def test_api_connection():
         api_key = os.getenv('COINDCX_API_KEY')
         api_secret = os.getenv('COINDCX_API_SECRET')
 
-        if not api_key or not api_secret:
+        # Check if credentials look like placeholders
+        is_placeholder = (
+            not api_key or
+            not api_secret or
+            'your_api_key_here' in api_key.lower() or
+            'your_coindcx' in api_key.lower() or
+            'your_api_secret_here' in api_secret.lower()
+        )
+
+        if is_placeholder:
             return jsonify({
                 'success': False,
-                'error': 'API credentials not configured in .env file'
+                'error': 'API credentials not configured in .env file',
+                'message': 'Please update .env file with real CoinDCX API credentials',
+                'credentials': {
+                    'api_key_set': bool(api_key and 'your_' not in api_key.lower()),
+                    'api_secret_set': bool(api_secret and 'your_' not in api_secret.lower())
+                }
             }), 400
 
         # Create test client
@@ -261,8 +276,21 @@ def start_bot():
         api_key = os.getenv('COINDCX_API_KEY')
         api_secret = os.getenv('COINDCX_API_SECRET')
 
-        if not api_key or not api_secret:
-            return jsonify({'error': 'API credentials not configured'}), 400
+        # Check if credentials look like placeholders
+        is_placeholder = (
+            not api_key or
+            not api_secret or
+            'your_api_key_here' in api_key.lower() or
+            'your_coindcx' in api_key.lower() or
+            'your_api_secret_here' in api_secret.lower()
+        )
+
+        if is_placeholder:
+            return jsonify({
+                'error': 'API credentials not configured',
+                'message': 'Please update .env file with real CoinDCX API credentials',
+                'hint': 'Get credentials from CoinDCX Settings > API Management'
+            }), 400
 
         # Initialize CoinDCX client
         client = CoinDCXFuturesClient(
@@ -392,15 +420,31 @@ def resume_bot():
 
 @app.route('/api/market/price', methods=['GET'])
 def get_market_price():
-    """Get current market price"""
-    global trader
-
-    if not trader or not trader.client:
-        return jsonify({'error': 'Bot not initialized'}), 400
-
+    """Get current market price (works without authentication - uses public API)"""
     try:
-        market = request.args.get('market', config['trading']['market'])
-        price = trader.client.get_current_price(market)
+        market = request.args.get('market')
+
+        # If no market specified, try to get from config
+        if not market and config:
+            market = config.get('trading', {}).get('market', 'B-SOL_USDT')
+        elif not market:
+            market = 'B-SOL_USDT'  # Default
+
+        # If trader is initialized, use its client
+        if trader and trader.client:
+            price = trader.client.get_current_price(market)
+        else:
+            # Use public API - no authentication needed
+            import requests
+            response = requests.get("https://public.coindcx.com/exchange/ticker", timeout=10)
+            response.raise_for_status()
+            tickers = response.json()
+
+            price = None
+            for ticker in tickers:
+                if ticker.get('market') == market:
+                    price = float(ticker.get('last_price', 0))
+                    break
 
         if price:
             return jsonify({
@@ -408,7 +452,7 @@ def get_market_price():
                 'price': price,
                 'timestamp': datetime.now().isoformat()
             })
-        return jsonify({'error': 'Failed to fetch price'}), 500
+        return jsonify({'error': f'Failed to fetch price for {market}'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

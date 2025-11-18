@@ -11,6 +11,8 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from telegram.error import TelegramError
 import logging
 from datetime import datetime
+import requests
+import json
 
 
 class TelegramNotifier:
@@ -64,6 +66,7 @@ class TelegramNotifier:
         self.application.add_handler(CommandHandler("stopbot", self._cmd_stopbot))
         self.application.add_handler(CommandHandler("startbot", self._cmd_startbot))
         self.application.add_handler(CommandHandler("restart", self._cmd_restart))
+        self.application.add_handler(CommandHandler("instruments", self._cmd_instruments))
         self.application.add_handler(CommandHandler("help", self._cmd_help))
 
         # Start polling in background
@@ -340,6 +343,67 @@ class TelegramNotifier:
         except Exception as e:
             await update.message.reply_text(f"❌ Error restarting bot: {str(e)}")
 
+    async def _cmd_instruments(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /instruments command - fetch CoinDCX active USDT instruments"""
+        try:
+            await update.message.reply_text("🔄 Fetching active USDT instruments from CoinDCX...")
+
+            # Fetch active instruments from CoinDCX API
+            url = "https://api.coindcx.com/exchange/v1/derivatives/futures/data/active_instruments?margin_currency_short_name[]=USDT"
+            response = requests.get(url, timeout=10)
+
+            if response.status_code != 200:
+                await update.message.reply_text(f"❌ Error fetching instruments: HTTP {response.status_code}")
+                return
+
+            instruments = response.json()
+
+            if not instruments:
+                await update.message.reply_text("❌ No active instruments found")
+                return
+
+            # Format the response - show first 20 instruments and total count
+            total_count = len(instruments)
+            display_limit = 20
+
+            message = f"📊 <b>CoinDCX Active USDT Instruments</b>\n\n"
+            message += f"Total: <b>{total_count}</b> instruments\n\n"
+            message += f"<b>First {min(display_limit, total_count)} instruments:</b>\n"
+
+            for i, instrument in enumerate(instruments[:display_limit], 1):
+                message += f"{i}. <code>{instrument}</code>\n"
+
+            if total_count > display_limit:
+                message += f"\n... and {total_count - display_limit} more"
+
+            # Send the message
+            await update.message.reply_text(message, parse_mode="HTML")
+
+            # Optionally send the full list as a file for easy reference
+            if total_count > display_limit:
+                # Create a formatted text file
+                file_content = "CoinDCX Active USDT Instruments\n"
+                file_content += "=" * 40 + "\n\n"
+                for instrument in instruments:
+                    file_content += f"{instrument}\n"
+
+                # Send as document
+                from io import BytesIO
+                file_bytes = BytesIO(file_content.encode('utf-8'))
+                file_bytes.name = f"coindcx_instruments_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+
+                await update.message.reply_document(
+                    document=file_bytes,
+                    filename=file_bytes.name,
+                    caption=f"📄 Complete list of {total_count} active USDT instruments"
+                )
+
+        except requests.RequestException as e:
+            await update.message.reply_text(f"❌ Network error: {str(e)}")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {str(e)}")
+            self.logger.error(f"Error in /instruments command: {e}")
+
     async def _cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command"""
         help_msg = (
@@ -352,7 +416,8 @@ class TelegramNotifier:
             "/status - Get bot status\n"
             "/pnl - View profit & loss\n"
             "/position - Check current position\n"
-            "/stats - Trading statistics\n\n"
+            "/stats - Trading statistics\n"
+            "/instruments - View active USDT instruments\n\n"
             "<b>ℹ️ Other:</b>\n"
             "/start - Welcome message\n"
             "/help - Show this message\n"
