@@ -589,7 +589,7 @@ class StandaloneTelegramBot:
             "/instruments - View active USDT instruments (no auth)\n"
             "/health - Check API health\n\n"
             "<b>📈 Technical Analysis:</b>\n"
-            "/analyze <COIN> [TF] - Detailed analysis (15+ coins)\n"
+            "/analyze &lt;COIN&gt; [TF] - Detailed analysis (15+ coins)\n"
             "/scan [TF...] - Scan 15 coins (default: 6 timeframes)\n"
             "/signals - Get signals with confirmation counts\n\n"
             "<b>ℹ️ Other:</b>\n"
