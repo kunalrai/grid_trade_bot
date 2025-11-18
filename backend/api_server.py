@@ -625,7 +625,7 @@ if __name__ == '__main__':
     print("=" * 60)
 
     # Get port from environment variable for production deployment
-    port = int(os.getenv('PORT', 5000))
+    port = int(os.getenv('PORT', 8000))
     debug = os.getenv('FLASK_ENV') != 'production'
 
     print(f"Server starting on http://0.0.0.0:{port}")
