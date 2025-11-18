@@ -177,6 +177,7 @@ function initializePriceChart() {
 function initializeEventListeners() {
     document.getElementById('startBtn').addEventListener('click', startBot);
     document.getElementById('stopBtn').addEventListener('click', stopBot);
+    document.getElementById('forceStopBtn').addEventListener('click', forceStopBot);
     document.getElementById('pauseBtn').addEventListener('click', pauseBtn);
     document.getElementById('resumeBtn').addEventListener('click', resumeBot);
     document.getElementById('saveConfigBtn').addEventListener('click', saveConfiguration);
@@ -225,6 +226,42 @@ async function stopBot() {
         }
     } catch (error) {
         addLog('Error stopping bot: ' + error.message, 'error');
+    }
+}
+
+async function forceStopBot() {
+    // Confirm before force stopping
+    if (!confirm('⚠️ Force stop will immediately terminate the bot and clear all error states. Continue?')) {
+        return;
+    }
+
+    try {
+        addLog('⚠️ Force stopping bot...', 'warning');
+        const response = await fetch(`${API_BASE_URL}/api/bot/force-stop`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            addLog('✅ Bot force stopped: ' + data.message, 'success');
+            updateControlButtons('stopped');
+
+            // Clear any error display
+            const statusEl = document.getElementById('botStatus');
+            statusEl.innerHTML = `
+                <div class="flex items-center gap-3 p-4 bg-gray-700 rounded-lg">
+                    <span class="status-dot w-4 h-4 rounded-full bg-red-500"></span>
+                    <span class="status-text text-lg font-medium">Stopped</span>
+                </div>
+            `;
+        } else {
+            addLog('Force stop completed with message: ' + data.message, 'warning');
+            updateControlButtons('stopped');
+        }
+    } catch (error) {
+        addLog('Error during force stop: ' + error.message, 'error');
+        // Still try to update UI to stopped state
+        updateControlButtons('stopped');
     }
 }
 

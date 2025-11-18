@@ -297,7 +297,7 @@ def start_bot():
 
 @app.route('/api/bot/stop', methods=['POST'])
 def stop_bot():
-    """Stop the trading bot"""
+    """Stop the trading bot gracefully"""
     global trader
 
     if not trader:
@@ -311,6 +311,45 @@ def stop_bot():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/bot/force-stop', methods=['POST'])
+def force_stop_bot():
+    """Force stop the trading bot (clears error states)"""
+    global trader, trader_thread
+
+    try:
+        if trader:
+            # Force stop the trader
+            trader.force_stop()
+
+            # Give it a moment to clean up
+            import time
+            time.sleep(0.5)
+
+            # Clear the trader instance
+            trader = None
+            trader_thread = None
+
+            return jsonify({
+                'success': True,
+                'message': 'Bot force stopped successfully'
+            })
+        else:
+            # Even if trader is None, clear the thread
+            trader_thread = None
+            return jsonify({
+                'success': True,
+                'message': 'No active bot to stop'
+            })
+    except Exception as e:
+        # On any error, still try to clear the trader
+        trader = None
+        trader_thread = None
+        return jsonify({
+            'success': True,
+            'message': f'Bot force stopped with errors: {str(e)}'
+        })
 
 
 @app.route('/api/bot/pause', methods=['POST'])

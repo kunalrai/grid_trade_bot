@@ -890,9 +890,11 @@ class GridTraderCoinDCX:
             self._shutdown()
 
     def stop(self):
-        """Stop the bot"""
+        """Stop the bot gracefully"""
+        self.logger.info("Stopping bot gracefully...")
         self.is_running = False
         self.bot_state = "stopped"
+        self.error_message = None
 
         # Stop Telegram bot if running
         if self.telegram and self.telegram.enabled and self.telegram_loop:
@@ -910,6 +912,41 @@ class GridTraderCoinDCX:
                 self.telegram_loop.call_soon_threadsafe(self.telegram_loop.stop)
             except Exception as e:
                 self.logger.error(f"Error stopping Telegram bot: {e}")
+
+    def force_stop(self):
+        """Force stop the bot immediately, clearing error state"""
+        self.logger.warning("Force stopping bot - clearing all states...")
+        self.is_running = False
+        self.bot_state = "stopped"
+        self.error_message = None
+
+        # Force stop Telegram bot if running
+        if self.telegram and self.telegram.enabled and self.telegram_loop:
+            try:
+                # Try to stop gracefully first
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        self.telegram.notify_bot_stopped("Force stop requested"),
+                        self.telegram_loop
+                    )
+                    asyncio.run_coroutine_threadsafe(
+                        self.telegram.stop_bot(),
+                        self.telegram_loop
+                    )
+                except:
+                    pass  # Ignore errors during force stop
+
+                # Force stop the loop
+                try:
+                    self.telegram_loop.call_soon_threadsafe(self.telegram_loop.stop)
+                except:
+                    pass  # Ignore errors
+
+                self.telegram_loop = None
+            except Exception as e:
+                self.logger.error(f"Error during force stop of Telegram bot: {e}")
+
+        self.logger.info("✅ Bot force stopped successfully")
 
     def pause(self):
         """Pause the bot"""
