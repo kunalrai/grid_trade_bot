@@ -235,7 +235,7 @@ class StandaloneTelegramBot:
         # Usage: /analyze BTC or /analyze SOL 4h
         if not context.args:
             await update.message.reply_text(
-                "Usage: /analyze <COIN> [TIMEFRAME]\n"
+                "Usage: /analyze &lt;COIN&gt; [TIMEFRAME]\n"
                 "Example: /analyze BTC\n"
                 "Example: /analyze ETH 4h\n\n"
                 "Available: BTC, ETH, SOL, BNB, XRP, ADA, DOGE, MATIC, DOT, AVAX, LINK, UNI, LTC, ATOM, ZEC\n"
@@ -484,7 +484,7 @@ class StandaloneTelegramBot:
                 message += "All markets are neutral.\n\n"
 
             message += f"⏰ {datetime.now().strftime('%H:%M:%S')}\n"
-            message += "\n💡 Use /analyze <COIN> for detailed analysis"
+            message += "\n💡 Use /analyze &lt;COIN&gt; for detailed analysis"
 
             await update.message.reply_text(message, parse_mode="HTML")
 
