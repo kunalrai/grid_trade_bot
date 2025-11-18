@@ -28,33 +28,85 @@ class TechnicalAnalyzer:
             DataFrame with OHLCV data or None
         """
         try:
-            # CoinDCX candle endpoint
-            url = f"{self.base_url}/market_data/candles"
+            # Map interval to resolution format for candlesticks endpoint
+            resolution_map = {
+                '1m': '1',
+                '5m': '5',
+                '15m': '15',
+                '30m': '30',
+                '1h': '60',
+                '2h': '120',
+                '4h': '240',
+                '1d': '1D'
+            }
+            resolution = resolution_map.get(interval, interval)
+
+            # Calculate time range based on interval and limit
+            now = int(datetime.now().timestamp())
+            interval_seconds = {
+                '1': 60, '5': 300, '15': 900, '30': 1800,
+                '60': 3600, '120': 7200, '240': 14400, '1D': 86400
+            }
+            seconds = interval_seconds.get(resolution, 300)
+            from_time = now - (seconds * limit)
+
+            # Try new candlesticks endpoint first
+            url = f"{self.base_url}/market_data/candlesticks"
             params = {
                 'pair': market,
-                'interval': interval,
-                'limit': limit
+                'resolution': resolution,
+                'from': from_time,
+                'to': now,
+                'pcode': 'f'
             }
 
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
-            data = response.json()
+            result = response.json()
 
-            if not data:
-                return None
+            if result.get('s') == 'ok' and result.get('data'):
+                data = result['data']
 
-            # Convert to DataFrame
-            df = pd.DataFrame(data)
-            df.columns = ['time', 'open', 'high', 'low', 'close', 'volume']
+                # Convert to DataFrame
+                df = pd.DataFrame(data)
+                df = df.rename(columns={'time': 'time'})
 
-            # Convert to numeric
-            for col in ['open', 'high', 'low', 'close', 'volume']:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+                # Convert to numeric
+                for col in ['open', 'high', 'low', 'close', 'volume']:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
 
-            df['time'] = pd.to_datetime(df['time'], unit='ms')
-            df = df.sort_values('time')
+                df['time'] = pd.to_datetime(df['time'], unit='ms')
+                df = df.sort_values('time')
 
-            return df
+                return df
+            else:
+                # Fallback to old endpoint
+                url = f"{self.base_url}/market_data/candles"
+                params = {
+                    'pair': market,
+                    'interval': interval,
+                    'limit': limit
+                }
+
+                response = requests.get(url, params=params, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+
+                if not data:
+                    return None
+
+                # Convert to DataFrame
+                df = pd.DataFrame(data)
+                df.columns = ['time', 'open', 'high', 'low', 'close', 'volume']
+
+                # Convert to numeric
+                for col in ['open', 'high', 'low', 'close', 'volume']:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+                df['time'] = pd.to_datetime(df['time'], unit='ms')
+                df = df.sort_values('time')
+
+                return df
 
         except Exception as e:
             print(f"Error fetching candles: {e}")

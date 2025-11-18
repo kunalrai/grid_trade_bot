@@ -97,7 +97,7 @@ class StandaloneTelegramBot:
         await update.message.reply_text(welcome_msg, parse_mode="HTML")
 
     async def _cmd_price(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /price command - fetch price from CoinDCX"""
+        """Handle /price command - fetch price from CoinDCX futures market"""
         if not context.args:
             await update.message.reply_text(
                 "Usage: /price &lt;COIN&gt;\n"
@@ -112,24 +112,63 @@ class StandaloneTelegramBot:
         market = f"B-{coin}_USDT"
 
         try:
-            # Fetch price from CoinDCX using the technical analyzer
-            analysis = self.analyzer.analyze_market(market, '5m')
+            # Get real-time price from v3 order book (most accurate)
+            orderbook_url = f'https://public.coindcx.com/market_data/v3/orderbook/{market}-futures/20'
+            response = requests.get(orderbook_url, timeout=10)
+            response.raise_for_status()
+            orderbook = response.json()
 
-            if not analysis:
-                await update.message.reply_text(f"❌ Failed to fetch price for {coin}")
+            # Get best bid and ask
+            bids = orderbook.get('bids', {})
+            asks = orderbook.get('asks', {})
+
+            if not bids or not asks:
+                await update.message.reply_text(f"❌ No order book data for {coin}")
                 return
 
-            price = analysis['price']['current']
-            high = analysis['price']['high']
-            low = analysis['price']['low']
+            # Sort to get best prices
+            bid_prices = sorted([float(p) for p in bids.keys()], reverse=True)
+            ask_prices = sorted([float(p) for p in asks.keys()])
+
+            best_bid = bid_prices[0]
+            best_ask = ask_prices[0]
+            mid_price = (best_bid + best_ask) / 2
+            spread = best_ask - best_bid
+            spread_pct = (spread / mid_price * 100) if mid_price > 0 else 0
+
+            # Calculate total bid/ask volume for top 5 levels
+            bid_volume = sum(float(bids[str(p)]) for p in bid_prices[:5])
+            ask_volume = sum(float(asks[str(p)]) for p in ask_prices[:5])
+
+            # Get 24h data from 1d candle for high/low/open
+            daily_analysis = self.analyzer.analyze_market(market, '1d')
+
+            if daily_analysis:
+                high = daily_analysis['price']['high']
+                low = daily_analysis['price']['low']
+                open_price = daily_analysis['price']['open']
+                change_pct = ((mid_price - open_price) / open_price * 100) if open_price > 0 else 0
+            else:
+                high = mid_price
+                low = mid_price
+                change_pct = 0
+
+            # Timestamp from orderbook
+            timestamp = orderbook.get('ts', 0)
+            data_time = datetime.fromtimestamp(timestamp / 1000).strftime('%H:%M:%S') if timestamp else datetime.now().strftime('%H:%M:%S')
 
             message = (
-                f"💰 <b>MARKET PRICE</b>\n\n"
-                f"Market: <code>{coin}/USDT</code>\n"
-                f"Price: <b>${price:.4f}</b>\n"
-                f"24h High: ${high:.4f}\n"
-                f"24h Low: ${low:.4f}\n"
-                f"Time: {datetime.now().strftime('%H:%M:%S')}"
+                f"💰 <b>FUTURES MARKET PRICE</b>\n\n"
+                f"Market: <code>{coin}/USDT-PERP</code>\n"
+                f"Price: <b>${mid_price:.2f}</b>\n"
+                f"Bid: ${best_bid:.2f} | Ask: ${best_ask:.2f}\n"
+                f"Spread: ${spread:.2f} ({spread_pct:.3f}%)\n\n"
+                f"24h High: ${high:.2f}\n"
+                f"24h Low: ${low:.2f}\n"
+                f"24h Change: {change_pct:+.2f}%\n\n"
+                f"Top 5 Liquidity:\n"
+                f"Bid: {bid_volume:.2f} {coin} | Ask: {ask_volume:.2f} {coin}\n\n"
+                f"⏰ {data_time}"
             )
             await update.message.reply_text(message, parse_mode="HTML")
 
