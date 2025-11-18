@@ -1,6 +1,7 @@
 """
 Standalone Telegram Bot for Grid Trading Bot
 Can run independently to monitor and control the trading bot via API
+Includes Technical Analysis features for BTC, ETH, SOL, ZEC
 """
 import os
 import asyncio
@@ -11,6 +12,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from telegram.error import TelegramError
 from datetime import datetime
 import logging
+from technical_analysis import TechnicalAnalyzer
 
 # Load environment variables
 load_dotenv()
@@ -35,6 +37,7 @@ class StandaloneTelegramBot:
         self.bot_token = bot_token
         self.api_url = api_url
         self.application = None
+        self.analyzer = TechnicalAnalyzer()  # Technical analysis module
 
     def _api_call(self, endpoint: str, method: str = 'GET') -> dict:
         """Make API call to the trading bot server"""
@@ -65,6 +68,12 @@ class StandaloneTelegramBot:
         self.application.add_handler(CommandHandler("stopbot", self._cmd_stopbot))
         self.application.add_handler(CommandHandler("instruments", self._cmd_instruments))
         self.application.add_handler(CommandHandler("health", self._cmd_health))
+
+        # Technical Analysis commands
+        self.application.add_handler(CommandHandler("analyze", self._cmd_analyze))
+        self.application.add_handler(CommandHandler("scan", self._cmd_scan))
+        self.application.add_handler(CommandHandler("signals", self._cmd_signals))
+
         self.application.add_handler(CommandHandler("help", self._cmd_help))
 
         # Start polling
@@ -303,6 +312,210 @@ class StandaloneTelegramBot:
         )
         await update.message.reply_text(message, parse_mode="HTML")
 
+    async def _cmd_analyze(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /analyze command - detailed technical analysis for a specific coin"""
+        # Usage: /analyze BTC or /analyze SOL 4h
+        if not context.args:
+            await update.message.reply_text(
+                "Usage: /analyze <COIN> [TIMEFRAME]\n"
+                "Example: /analyze BTC\n"
+                "Example: /analyze ETH 4h\n\n"
+                "Available: BTC, ETH, SOL, ZEC\n"
+                "Timeframes: 5m, 4h (default: 5m)"
+            )
+            return
+
+        coin = context.args[0].upper()
+        interval = context.args[1] if len(context.args) > 1 else '5m'
+
+        # Convert coin to CoinDCX market format
+        market = f"B-{coin}_USDT"
+
+        await update.message.reply_text(f"🔍 Analyzing {coin}/USDT on {interval} timeframe...")
+
+        try:
+            analysis = self.analyzer.analyze_market(market, interval)
+
+            if not analysis:
+                await update.message.reply_text(f"❌ Failed to fetch data for {coin}")
+                return
+
+            # Format the message
+            price = analysis['price']
+            rsi = analysis['rsi']
+            macd = analysis['macd']
+            ema = analysis['ema']
+            volume = analysis['volume']
+            signal = analysis['signal']
+
+            # Signal emoji
+            signal_emoji = {
+                'strong_buy': '🟢🟢',
+                'buy': '🟢',
+                'neutral': '⚪',
+                'sell': '🔴',
+                'strong_sell': '🔴🔴'
+            }.get(signal, '⚪')
+
+            message = (
+                f"📊 <b>{coin}/USDT Technical Analysis</b> ({interval})\n"
+                f"━━━━━━━━━━━━━━━━━━\n\n"
+                f"<b>💰 Price:</b> ${price['current']:.2f}\n"
+                f"High: ${price['high']:.2f} | Low: ${price['low']:.2f}\n\n"
+                f"<b>📈 RSI (14):</b> {rsi['value']:.2f}\n"
+                f"Status: {rsi['status'].upper()}\n\n"
+                f"<b>📉 MACD:</b>\n"
+                f"MACD: {macd['macd']:.4f}\n"
+                f"Signal: {macd['signal']:.4f}\n"
+                f"Histogram: {macd['histogram']:.4f} ({macd['status']})\n\n"
+                f"<b>📊 EMA:</b>\n"
+                f"EMA20: ${ema['ema20']:.2f}\n"
+                f"EMA50: ${ema['ema50']:.2f}\n"
+                f"Trend: {ema['trend'].upper()}\n"
+            )
+
+            # Add cross detection
+            if ema['cross'] == 'golden_cross':
+                message += "✨ <b>GOLDEN CROSS DETECTED!</b>\n"
+            elif ema['cross'] == 'death_cross':
+                message += "☠️ <b>DEATH CROSS DETECTED!</b>\n"
+
+            message += (
+                f"\n<b>📊 Volume:</b>\n"
+                f"Current: {volume['current']:.2f}\n"
+                f"Avg (20): {volume['average']:.2f}\n"
+                f"Ratio: {volume['ratio']:.2f}x ({volume['status'].upper()})\n\n"
+                f"<b>🎯 Signal:</b> {signal_emoji} <b>{signal.upper().replace('_', ' ')}</b>\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+
+            await update.message.reply_text(message, parse_mode="HTML")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {str(e)}")
+            logger.error(f"Error in analyze command: {e}")
+
+    async def _cmd_scan(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /scan command - scan BTC, ETH, SOL, ZEC on 5m and 4h"""
+        await update.message.reply_text("🔍 Scanning BTC, ETH, SOL, ZEC on 5m and 4h timeframes...")
+
+        try:
+            markets = ['B-BTC_USDT', 'B-ETH_USDT', 'B-SOL_USDT', 'B-ZEC_USDT']
+            results = self.analyzer.scan_multiple_markets(markets, ['5m', '4h'])
+
+            message = "<b>📊 MARKET SCAN RESULTS</b>\n"
+            message += "━━━━━━━━━━━━━━━━━━\n\n"
+
+            for market, intervals in results.items():
+                coin = market.replace('B-', '').replace('_USDT', '')
+
+                # Get signals for both timeframes
+                tf_5m = intervals.get('5m', {})
+                tf_4h = intervals.get('4h', {})
+
+                signal_5m = tf_5m.get('signal', 'N/A')
+                signal_4h = tf_4h.get('signal', 'N/A')
+                price = tf_5m.get('price', {}).get('current', 0)
+
+                # Emoji for signals
+                emoji_5m = '🟢' if 'buy' in signal_5m else '🔴' if 'sell' in signal_5m else '⚪'
+                emoji_4h = '🟢' if 'buy' in signal_4h else '🔴' if 'sell' in signal_4h else '⚪'
+
+                # Special markers for crosses
+                cross_5m = tf_5m.get('ema', {}).get('cross', 'none')
+                cross_4h = tf_4h.get('ema', {}).get('cross', 'none')
+
+                cross_marker = ""
+                if cross_5m == 'golden_cross' or cross_4h == 'golden_cross':
+                    cross_marker = " ✨"
+                elif cross_5m == 'death_cross' or cross_4h == 'death_cross':
+                    cross_marker = " ☠️"
+
+                message += (
+                    f"<b>{coin}</b> ${price:.2f}{cross_marker}\n"
+                    f"5m: {emoji_5m} {signal_5m.replace('_', ' ').title()}\n"
+                    f"4h: {emoji_4h} {signal_4h.replace('_', ' ').title()}\n\n"
+                )
+
+            message += f"⏰ {datetime.now().strftime('%H:%M:%S')}"
+
+            await update.message.reply_text(message, parse_mode="HTML")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {str(e)}")
+            logger.error(f"Error in scan command: {e}")
+
+    async def _cmd_signals(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /signals command - show only actionable buy/sell signals"""
+        await update.message.reply_text("🎯 Finding trading signals...")
+
+        try:
+            markets = ['B-BTC_USDT', 'B-ETH_USDT', 'B-SOL_USDT', 'B-ZEC_USDT']
+            signals = self.analyzer.get_trading_signals(markets)
+
+            message = "<b>🎯 TRADING SIGNALS</b>\n"
+            message += "━━━━━━━━━━━━━━━━━━\n\n"
+
+            has_signals = False
+
+            # Strong Buy signals
+            if signals['strong_buy']:
+                has_signals = True
+                message += "<b>🟢🟢 STRONG BUY:</b>\n"
+                for item in signals['strong_buy']:
+                    coin = item['market'].replace('B-', '').replace('_USDT', '')
+                    price = item['5m'].get('price', {}).get('current', 0)
+                    confirmation = item['confirmation'].replace('_', ' ').title()
+                    message += f"• {coin} ${price:.2f} ({confirmation})\n"
+                message += "\n"
+
+            # Buy signals
+            if signals['buy']:
+                has_signals = True
+                message += "<b>🟢 BUY:</b>\n"
+                for item in signals['buy']:
+                    coin = item['market'].replace('B-', '').replace('_USDT', '')
+                    price = item['5m'].get('price', {}).get('current', 0)
+                    confirmation = item['confirmation'].replace('_', ' ').title()
+                    message += f"• {coin} ${price:.2f} ({confirmation})\n"
+                message += "\n"
+
+            # Strong Sell signals
+            if signals['strong_sell']:
+                has_signals = True
+                message += "<b>🔴🔴 STRONG SELL:</b>\n"
+                for item in signals['strong_sell']:
+                    coin = item['market'].replace('B-', '').replace('_USDT', '')
+                    price = item['5m'].get('price', {}).get('current', 0)
+                    confirmation = item['confirmation'].replace('_', ' ').title()
+                    message += f"• {coin} ${price:.2f} ({confirmation})\n"
+                message += "\n"
+
+            # Sell signals
+            if signals['sell']:
+                has_signals = True
+                message += "<b>🔴 SELL:</b>\n"
+                for item in signals['sell']:
+                    coin = item['market'].replace('B-', '').replace('_USDT', '')
+                    price = item['5m'].get('price', {}).get('current', 0)
+                    confirmation = item['confirmation'].replace('_', ' ').title()
+                    message += f"• {coin} ${price:.2f} ({confirmation})\n"
+                message += "\n"
+
+            if not has_signals:
+                message += "⚪ No strong signals at the moment.\n"
+                message += "All markets are neutral.\n\n"
+
+            message += f"⏰ {datetime.now().strftime('%H:%M:%S')}\n"
+            message += "\n💡 Use /analyze <COIN> for detailed analysis"
+
+            await update.message.reply_text(message, parse_mode="HTML")
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error: {str(e)}")
+            logger.error(f"Error in signals command: {e}")
+
     async def _cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command"""
         help_msg = (
@@ -317,6 +530,10 @@ class StandaloneTelegramBot:
             "/stats - Trading statistics\n"
             "/instruments - View active USDT instruments (no auth)\n"
             "/health - Check API health\n\n"
+            "<b>📈 Technical Analysis:</b>\n"
+            "/analyze <COIN> [TF] - Detailed analysis (BTC, ETH, SOL, ZEC)\n"
+            "/scan - Quick scan all coins (5m & 4h)\n"
+            "/signals - Get actionable buy/sell signals\n\n"
             "<b>ℹ️ Other:</b>\n"
             "/start - Welcome message\n"
             "/help - Show this message\n\n"
