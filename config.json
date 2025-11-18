@@ -6,7 +6,12 @@
     "buy_level": 139,
     "sell_level": 143,
     "order_type": "market",
-    "trade_direction": "short"
+    "trade_direction": "short",
+    "use_technical_analysis": true,
+    "require_timeframe_confirmation": true,
+    "timeframes": ["5m", "15m", "1h", "2h", "4h", "1d"],
+    "min_confirmations": 4,
+    "min_signal_strength": "buy"
   },
   "safety": {
     "max_cumulative_loss": -1,

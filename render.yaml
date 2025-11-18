@@ -19,3 +19,21 @@ services:
         value: 10000
     healthCheckPath: /api/health
     autoDeploy: true
+
+  # Background worker for standalone Telegram bot
+  - type: background
+    name: telegram-bot-standalone
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python telegram_bot_standalone.py"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: API_BASE_URL
+        value: "https://grid-trading-bot.onrender.com"  # Update with your actual Render URL
+    autoDeploy: true

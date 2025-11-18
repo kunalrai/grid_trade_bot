@@ -320,8 +320,8 @@ class StandaloneTelegramBot:
                 "Usage: /analyze <COIN> [TIMEFRAME]\n"
                 "Example: /analyze BTC\n"
                 "Example: /analyze ETH 4h\n\n"
-                "Available: BTC, ETH, SOL, ZEC\n"
-                "Timeframes: 5m, 4h (default: 5m)"
+                "Available: BTC, ETH, SOL, BNB, XRP, ADA, DOGE, MATIC, DOT, AVAX, LINK, UNI, LTC, ATOM, ZEC\n"
+                "Timeframes: 5m, 15m, 1h, 2h, 4h, 1d (default: 5m)"
             )
             return
 
@@ -397,46 +397,66 @@ class StandaloneTelegramBot:
             logger.error(f"Error in analyze command: {e}")
 
     async def _cmd_scan(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /scan command - scan BTC, ETH, SOL, ZEC on 5m and 4h"""
-        await update.message.reply_text("🔍 Scanning BTC, ETH, SOL, ZEC on 5m and 4h timeframes...")
+        """Handle /scan command - scan multiple coins on multiple timeframes"""
+        timeframes = context.args if context.args else ['5m', '15m', '1h', '2h', '4h', '1d']
+
+        await update.message.reply_text(f"🔍 Scanning major coins on {', '.join(timeframes)} timeframes...")
 
         try:
-            markets = ['B-BTC_USDT', 'B-ETH_USDT', 'B-SOL_USDT', 'B-ZEC_USDT']
-            results = self.analyzer.scan_multiple_markets(markets, ['5m', '4h'])
+            markets = [
+                'B-BTC_USDT',   # Bitcoin
+                'B-ETH_USDT',   # Ethereum
+                'B-SOL_USDT',   # Solana
+                'B-BNB_USDT',   # Binance Coin
+                'B-XRP_USDT',   # Ripple
+                'B-ADA_USDT',   # Cardano
+                'B-DOGE_USDT',  # Dogecoin
+                'B-MATIC_USDT', # Polygon
+                'B-DOT_USDT',   # Polkadot
+                'B-AVAX_USDT',  # Avalanche
+                'B-LINK_USDT',  # Chainlink
+                'B-UNI_USDT',   # Uniswap
+                'B-LTC_USDT',   # Litecoin
+                'B-ATOM_USDT',  # Cosmos
+                'B-ZEC_USDT'    # Zcash
+            ]
+            results = self.analyzer.scan_multiple_markets(markets, timeframes)
 
-            message = "<b>📊 MARKET SCAN RESULTS</b>\n"
+            message = f"<b>📊 MARKET SCAN RESULTS</b>\n"
+            message += f"Timeframes: {', '.join(timeframes)}\n"
             message += "━━━━━━━━━━━━━━━━━━\n\n"
 
             for market, intervals in results.items():
                 coin = market.replace('B-', '').replace('_USDT', '')
 
-                # Get signals for both timeframes
-                tf_5m = intervals.get('5m', {})
-                tf_4h = intervals.get('4h', {})
+                # Get price from first available timeframe
+                price = 0
+                for tf_data in intervals.values():
+                    if tf_data.get('price'):
+                        price = tf_data['price'].get('current', 0)
+                        break
 
-                signal_5m = tf_5m.get('signal', 'N/A')
-                signal_4h = tf_4h.get('signal', 'N/A')
-                price = tf_5m.get('price', {}).get('current', 0)
-
-                # Emoji for signals
-                emoji_5m = '🟢' if 'buy' in signal_5m else '🔴' if 'sell' in signal_5m else '⚪'
-                emoji_4h = '🟢' if 'buy' in signal_4h else '🔴' if 'sell' in signal_4h else '⚪'
-
-                # Special markers for crosses
-                cross_5m = tf_5m.get('ema', {}).get('cross', 'none')
-                cross_4h = tf_4h.get('ema', {}).get('cross', 'none')
-
+                # Check for crosses in any timeframe
                 cross_marker = ""
-                if cross_5m == 'golden_cross' or cross_4h == 'golden_cross':
-                    cross_marker = " ✨"
-                elif cross_5m == 'death_cross' or cross_4h == 'death_cross':
-                    cross_marker = " ☠️"
+                for tf_data in intervals.values():
+                    cross = tf_data.get('ema', {}).get('cross', 'none')
+                    if cross == 'golden_cross':
+                        cross_marker = " ✨"
+                        break
+                    elif cross == 'death_cross':
+                        cross_marker = " ☠️"
+                        break
 
-                message += (
-                    f"<b>{coin}</b> ${price:.2f}{cross_marker}\n"
-                    f"5m: {emoji_5m} {signal_5m.replace('_', ' ').title()}\n"
-                    f"4h: {emoji_4h} {signal_4h.replace('_', ' ').title()}\n\n"
-                )
+                message += f"<b>{coin}</b> ${price:.2f}{cross_marker}\n"
+
+                # Show signal for each timeframe
+                for tf in timeframes:
+                    tf_data = intervals.get(tf, {})
+                    signal = tf_data.get('signal', 'N/A')
+                    emoji = '🟢' if 'buy' in signal else '🔴' if 'sell' in signal else '⚪'
+                    message += f"{tf}: {emoji} {signal.replace('_', ' ').title()}\n"
+
+                message += "\n"
 
             message += f"⏰ {datetime.now().strftime('%H:%M:%S')}"
 
@@ -448,11 +468,28 @@ class StandaloneTelegramBot:
 
     async def _cmd_signals(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /signals command - show only actionable buy/sell signals"""
-        await update.message.reply_text("🎯 Finding trading signals...")
+        await update.message.reply_text("🎯 Finding trading signals across 15 coins and 6 timeframes...")
 
         try:
-            markets = ['B-BTC_USDT', 'B-ETH_USDT', 'B-SOL_USDT', 'B-ZEC_USDT']
-            signals = self.analyzer.get_trading_signals(markets)
+            markets = [
+                'B-BTC_USDT',   # Bitcoin
+                'B-ETH_USDT',   # Ethereum
+                'B-SOL_USDT',   # Solana
+                'B-BNB_USDT',   # Binance Coin
+                'B-XRP_USDT',   # Ripple
+                'B-ADA_USDT',   # Cardano
+                'B-DOGE_USDT',  # Dogecoin
+                'B-MATIC_USDT', # Polygon
+                'B-DOT_USDT',   # Polkadot
+                'B-AVAX_USDT',  # Avalanche
+                'B-LINK_USDT',  # Chainlink
+                'B-UNI_USDT',   # Uniswap
+                'B-LTC_USDT',   # Litecoin
+                'B-ATOM_USDT',  # Cosmos
+                'B-ZEC_USDT'    # Zcash
+            ]
+            timeframes = ['5m', '15m', '1h', '2h', '4h', '1d']
+            signals = self.analyzer.get_trading_signals(markets, timeframes)
 
             message = "<b>🎯 TRADING SIGNALS</b>\n"
             message += "━━━━━━━━━━━━━━━━━━\n\n"
@@ -465,9 +502,15 @@ class StandaloneTelegramBot:
                 message += "<b>🟢🟢 STRONG BUY:</b>\n"
                 for item in signals['strong_buy']:
                     coin = item['market'].replace('B-', '').replace('_USDT', '')
-                    price = item['5m'].get('price', {}).get('current', 0)
-                    confirmation = item['confirmation'].replace('_', ' ').title()
-                    message += f"• {coin} ${price:.2f} ({confirmation})\n"
+                    # Get price from first available timeframe
+                    price = 0
+                    for tf_data in item['timeframe_data'].values():
+                        if tf_data.get('price'):
+                            price = tf_data['price'].get('current', 0)
+                            break
+                    conf_count = item['confirmation_count']
+                    total = item['total_timeframes']
+                    message += f"• {coin} ${price:.2f} ({conf_count}/{total} TF)\n"
                 message += "\n"
 
             # Buy signals
@@ -476,9 +519,14 @@ class StandaloneTelegramBot:
                 message += "<b>🟢 BUY:</b>\n"
                 for item in signals['buy']:
                     coin = item['market'].replace('B-', '').replace('_USDT', '')
-                    price = item['5m'].get('price', {}).get('current', 0)
-                    confirmation = item['confirmation'].replace('_', ' ').title()
-                    message += f"• {coin} ${price:.2f} ({confirmation})\n"
+                    price = 0
+                    for tf_data in item['timeframe_data'].values():
+                        if tf_data.get('price'):
+                            price = tf_data['price'].get('current', 0)
+                            break
+                    conf_count = item['confirmation_count']
+                    total = item['total_timeframes']
+                    message += f"• {coin} ${price:.2f} ({conf_count}/{total} TF)\n"
                 message += "\n"
 
             # Strong Sell signals
@@ -487,9 +535,14 @@ class StandaloneTelegramBot:
                 message += "<b>🔴🔴 STRONG SELL:</b>\n"
                 for item in signals['strong_sell']:
                     coin = item['market'].replace('B-', '').replace('_USDT', '')
-                    price = item['5m'].get('price', {}).get('current', 0)
-                    confirmation = item['confirmation'].replace('_', ' ').title()
-                    message += f"• {coin} ${price:.2f} ({confirmation})\n"
+                    price = 0
+                    for tf_data in item['timeframe_data'].values():
+                        if tf_data.get('price'):
+                            price = tf_data['price'].get('current', 0)
+                            break
+                    conf_count = item['confirmation_count']
+                    total = item['total_timeframes']
+                    message += f"• {coin} ${price:.2f} ({conf_count}/{total} TF)\n"
                 message += "\n"
 
             # Sell signals
@@ -498,9 +551,14 @@ class StandaloneTelegramBot:
                 message += "<b>🔴 SELL:</b>\n"
                 for item in signals['sell']:
                     coin = item['market'].replace('B-', '').replace('_USDT', '')
-                    price = item['5m'].get('price', {}).get('current', 0)
-                    confirmation = item['confirmation'].replace('_', ' ').title()
-                    message += f"• {coin} ${price:.2f} ({confirmation})\n"
+                    price = 0
+                    for tf_data in item['timeframe_data'].values():
+                        if tf_data.get('price'):
+                            price = tf_data['price'].get('current', 0)
+                            break
+                    conf_count = item['confirmation_count']
+                    total = item['total_timeframes']
+                    message += f"• {coin} ${price:.2f} ({conf_count}/{total} TF)\n"
                 message += "\n"
 
             if not has_signals:
@@ -531,9 +589,9 @@ class StandaloneTelegramBot:
             "/instruments - View active USDT instruments (no auth)\n"
             "/health - Check API health\n\n"
             "<b>📈 Technical Analysis:</b>\n"
-            "/analyze <COIN> [TF] - Detailed analysis (BTC, ETH, SOL, ZEC)\n"
-            "/scan - Quick scan all coins (5m & 4h)\n"
-            "/signals - Get actionable buy/sell signals\n\n"
+            "/analyze <COIN> [TF] - Detailed analysis (15+ coins)\n"
+            "/scan [TF...] - Scan 15 coins (default: 6 timeframes)\n"
+            "/signals - Get signals with confirmation counts\n\n"
             "<b>ℹ️ Other:</b>\n"
             "/start - Welcome message\n"
             "/help - Show this message\n\n"

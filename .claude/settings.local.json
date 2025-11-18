@@ -7,7 +7,8 @@
       "Bash(del \\.c:appsrepogrid_trade_botnul)",
       "Bash(git add:*)",
       "Bash(if exist nul echo \"nul file exists\" else echo \"nul file does not exist\")",
-      "Bash(git commit -m \"$(cat <<''EOF''\nfix: Update frontend API URLs to use dynamic origin for cloud deployments\n\nChanged hardcoded localhost URLs to window.location.origin to automatically\ndetect the correct API endpoint based on the deployment environment.\n\nThis fixes the \"Failed to fetch\" error when saving configuration on Render\nand other cloud platforms.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
+      "Bash(git commit -m \"$(cat <<''EOF''\nfix: Update frontend API URLs to use dynamic origin for cloud deployments\n\nChanged hardcoded localhost URLs to window.location.origin to automatically\ndetect the correct API endpoint based on the deployment environment.\n\nThis fixes the \"Failed to fetch\" error when saving configuration on Render\nand other cloud platforms.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(Procfile)"
     ],
     "deny": [],
     "ask": []

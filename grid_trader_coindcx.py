@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any
 from coindcx_client import CoinDCXFuturesClient
 from logger import TradingLogger
 from telegram_notifier import TelegramNotifier
+from technical_analysis import TechnicalAnalyzer
 
 
 class GridTraderCoinDCX:
@@ -32,6 +33,10 @@ class GridTraderCoinDCX:
         if config['monitoring'].get('enable_telegram_alerts', False):
             self.telegram = TelegramNotifier(logger=logger)
 
+        # Initialize Technical Analyzer
+        self.use_technical_analysis = config['trading'].get('use_technical_analysis', False)
+        self.analyzer = TechnicalAnalyzer() if self.use_technical_analysis else None
+
         # Trading parameters
         self.market = config['trading']['market']  # e.g., 'SOLUSDT'
         self.buy_level = config['trading']['buy_level']
@@ -40,6 +45,12 @@ class GridTraderCoinDCX:
         self.leverage = config['trading']['leverage']
         self.order_type = config['trading']['order_type']
         self.trade_direction = config['trading'].get('trade_direction', 'long')  # 'long', 'short', or 'both'
+
+        # Multi-timeframe confirmation settings
+        self.require_timeframe_confirmation = config['trading'].get('require_timeframe_confirmation', False)
+        self.timeframes = config['trading'].get('timeframes', ['5m', '15m', '1h', '2h', '4h', '1d'])
+        self.min_confirmations = config['trading'].get('min_confirmations', 4)
+        self.min_signal_strength = config['trading'].get('min_signal_strength', 'buy')
 
         # Safety parameters
         self.max_loss = config['safety']['max_cumulative_loss']
@@ -227,25 +238,33 @@ class GridTraderCoinDCX:
         if self.trade_direction in ['long', 'both']:
             # BUY at buy_level if no long position
             if current_price <= self.buy_level and not has_long:
-                if self._execute_long_entry(current_price):
-                    self.total_trades += 1
+                # Check multi-timeframe confirmation if enabled
+                if self._check_entry_confirmation('buy', current_price):
+                    if self._execute_long_entry(current_price):
+                        self.total_trades += 1
 
             # SELL (close long) at sell_level if long position exists
             elif current_price >= self.sell_level and has_long:
-                if self._execute_long_exit(current_price):
-                    self.total_trades += 1
+                # Check multi-timeframe confirmation if enabled
+                if self._check_exit_confirmation('sell', current_price):
+                    if self._execute_long_exit(current_price):
+                        self.total_trades += 1
 
         # Execute SHORT trading logic
         if self.trade_direction in ['short', 'both']:
             # SHORT SELL at sell_level if no short position
             if current_price >= self.sell_level and not has_short:
-                if self._execute_short_entry(current_price):
-                    self.total_trades += 1
+                # Check multi-timeframe confirmation if enabled
+                if self._check_entry_confirmation('sell', current_price):
+                    if self._execute_short_entry(current_price):
+                        self.total_trades += 1
 
             # BUY BACK (close short) at buy_level if short position exists
             elif current_price <= self.buy_level and has_short:
-                if self._execute_short_exit(current_price):
-                    self.total_trades += 1
+                # Check multi-timeframe confirmation if enabled
+                if self._check_exit_confirmation('buy', current_price):
+                    if self._execute_short_exit(current_price):
+                        self.total_trades += 1
 
         # Check if cumulative loss exceeds limit
         if self.cumulative_pnl <= self.max_loss:
@@ -979,3 +998,71 @@ class GridTraderCoinDCX:
             self.logger.warning(f"Unrealized P&L: ${position['unrealized_pnl']:+.2f}")
 
         self.logger.info("=" * 60)
+
+    def _check_entry_confirmation(self, direction: str, current_price: float) -> bool:
+        """
+        Check if entry should be allowed based on multi-timeframe confirmation
+
+        Args:
+            direction: 'buy' or 'sell'
+            current_price: Current market price
+
+        Returns:
+            True if entry is allowed, False otherwise
+        """
+        # If technical analysis is disabled, always allow
+        if not self.use_technical_analysis or not self.require_timeframe_confirmation:
+            return True
+
+        try:
+            # Convert market to CoinDCX format
+            market_symbol = f"B-{self.market.replace('USDT', '')}_USDT"
+
+            # Check multi-timeframe confirmation
+            confirmation = self.analyzer.check_multi_timeframe_confirmation(
+                market=market_symbol,
+                timeframes=self.timeframes,
+                min_confirmations=self.min_confirmations,
+                required_signal=direction
+            )
+
+            if confirmation['confirmed']:
+                self.logger.info(
+                    f"✅ Multi-timeframe confirmation: {confirmation['confirmations']}/{confirmation['total_timeframes']} "
+                    f"timeframes confirm {direction.upper()} signal ({confirmation['percentage']:.0f}%)"
+                )
+
+                # Log details for each timeframe
+                for tf, data in confirmation['timeframe_results'].items():
+                    self.logger.info(
+                        f"  {tf}: {data['signal']} | RSI:{data['rsi']:.1f} | "
+                        f"MACD:{data['macd_histogram']:.2f} | Vol:{data['volume_status']}"
+                    )
+
+                return True
+            else:
+                self.logger.warning(
+                    f"❌ Insufficient confirmation: Only {confirmation['confirmations']}/{confirmation['required']} "
+                    f"timeframes confirm {direction.upper()} signal ({confirmation['percentage']:.0f}%). Skipping entry."
+                )
+                return False
+
+        except Exception as e:
+            self.logger.error(f"Error checking multi-timeframe confirmation: {e}")
+            # If error, fall back to price-only logic
+            return True
+
+    def _check_exit_confirmation(self, direction: str, current_price: float) -> bool:
+        """
+        Check if exit should be allowed based on multi-timeframe confirmation
+
+        Args:
+            direction: 'buy' or 'sell'
+            current_price: Current market price
+
+        Returns:
+            True if exit is allowed, False otherwise
+        """
+        # Always allow exits - we want to take profits
+        # Multi-timeframe confirmation is primarily for entries
+        return True

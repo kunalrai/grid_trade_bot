@@ -259,11 +259,18 @@ class TechnicalAnalyzer:
 
         return results
 
-    def get_trading_signals(self, markets: List[str]) -> Dict:
+    def get_trading_signals(self, markets: List[str], timeframes: List[str] = None) -> Dict:
         """
         Get consolidated trading signals for multiple markets
         Returns only markets with actionable signals (buy/sell)
+
+        Args:
+            markets: List of market symbols
+            timeframes: List of timeframes to analyze (default: ['5m', '4h'])
         """
+        if timeframes is None:
+            timeframes = ['5m', '4h']
+
         signals = {
             'strong_buy': [],
             'buy': [],
@@ -272,41 +279,117 @@ class TechnicalAnalyzer:
             'timestamp': datetime.now().isoformat()
         }
 
-        scan_results = self.scan_multiple_markets(markets, ['5m', '4h'])
+        scan_results = self.scan_multiple_markets(markets, timeframes)
 
         for market, intervals in scan_results.items():
-            # Check both timeframes
-            tf_5m = intervals.get('5m', {})
-            tf_4h = intervals.get('4h', {})
+            # Collect signals from all timeframes
+            tf_signals = {}
+            for tf in timeframes:
+                tf_data = intervals.get(tf, {})
+                tf_signals[tf] = tf_data.get('signal', 'neutral')
 
-            signal_5m = tf_5m.get('signal', 'neutral')
-            signal_4h = tf_4h.get('signal', 'neutral')
+            # Count confirmations by signal type
+            signal_counts = {
+                'strong_buy': 0,
+                'buy': 0,
+                'neutral': 0,
+                'sell': 0,
+                'strong_sell': 0
+            }
 
-            # Both timeframes agree - stronger signal
-            if signal_5m == signal_4h and signal_5m in signals:
-                signals[signal_5m].append({
+            for signal in tf_signals.values():
+                if signal in signal_counts:
+                    signal_counts[signal] += 1
+
+            # Determine overall signal based on majority
+            # Group buy signals
+            buy_count = signal_counts['buy'] + signal_counts['strong_buy']
+            sell_count = signal_counts['sell'] + signal_counts['strong_sell']
+
+            overall_signal = None
+            confirmation_count = 0
+
+            if buy_count >= sell_count and buy_count > signal_counts['neutral']:
+                if signal_counts['strong_buy'] >= signal_counts['buy']:
+                    overall_signal = 'strong_buy'
+                    confirmation_count = signal_counts['strong_buy']
+                else:
+                    overall_signal = 'buy'
+                    confirmation_count = buy_count
+            elif sell_count > buy_count and sell_count > signal_counts['neutral']:
+                if signal_counts['strong_sell'] >= signal_counts['sell']:
+                    overall_signal = 'strong_sell'
+                    confirmation_count = signal_counts['strong_sell']
+                else:
+                    overall_signal = 'sell'
+                    confirmation_count = sell_count
+
+            # Add to signals if we have a clear direction
+            if overall_signal and overall_signal in signals:
+                signals[overall_signal].append({
                     'market': market,
-                    'signal': signal_5m,
-                    'confirmation': 'both_timeframes',
-                    '5m': tf_5m,
-                    '4h': tf_4h
-                })
-            # One timeframe has strong signal
-            elif signal_5m in ['strong_buy', 'strong_sell'] and signal_5m in signals:
-                signals[signal_5m].append({
-                    'market': market,
-                    'signal': signal_5m,
-                    'confirmation': '5m_only',
-                    '5m': tf_5m,
-                    '4h': tf_4h
-                })
-            elif signal_4h in ['strong_buy', 'strong_sell'] and signal_4h in signals:
-                signals[signal_4h].append({
-                    'market': market,
-                    'signal': signal_4h,
-                    'confirmation': '4h_only',
-                    '5m': tf_5m,
-                    '4h': tf_4h
+                    'signal': overall_signal,
+                    'confirmation_count': confirmation_count,
+                    'total_timeframes': len(timeframes),
+                    'timeframe_signals': tf_signals,
+                    'timeframe_data': intervals
                 })
 
         return signals
+
+    def check_multi_timeframe_confirmation(self, market: str, timeframes: List[str],
+                                           min_confirmations: int = 4,
+                                           required_signal: str = 'buy') -> Dict:
+        """
+        Check if a market has sufficient multi-timeframe confirmation
+
+        Args:
+            market: Market symbol (e.g., 'B-SOL_USDT')
+            timeframes: List of timeframes to check (e.g., ['5m', '15m', '1h', '2h', '4h', '1d'])
+            min_confirmations: Minimum number of timeframes that must agree
+            required_signal: Required signal type ('buy', 'strong_buy', 'sell', 'strong_sell')
+
+        Returns:
+            Dictionary with confirmation status and details
+        """
+        results = {}
+
+        for tf in timeframes:
+            analysis = self.analyze_market(market, tf)
+            if analysis:
+                results[tf] = {
+                    'signal': analysis['signal'],
+                    'rsi': analysis['rsi']['value'],
+                    'macd_histogram': analysis['macd']['histogram'],
+                    'ema_cross': analysis['ema']['cross'],
+                    'volume_status': analysis['volume']['status'],
+                    'price': analysis['price']['current']
+                }
+
+        # Count confirmations
+        confirmations = 0
+        buy_signals = ['buy', 'strong_buy']
+        sell_signals = ['sell', 'strong_sell']
+
+        if required_signal in buy_signals:
+            target_signals = buy_signals
+        elif required_signal in sell_signals:
+            target_signals = sell_signals
+        else:
+            target_signals = [required_signal]
+
+        for tf, data in results.items():
+            if data['signal'] in target_signals:
+                confirmations += 1
+
+        confirmed = confirmations >= min_confirmations
+
+        return {
+            'confirmed': confirmed,
+            'confirmations': confirmations,
+            'required': min_confirmations,
+            'total_timeframes': len(timeframes),
+            'percentage': (confirmations / len(timeframes) * 100) if timeframes else 0,
+            'timeframe_results': results,
+            'overall_signal': required_signal if confirmed else 'insufficient'
+        }
